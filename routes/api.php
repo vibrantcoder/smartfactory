@@ -79,8 +79,9 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
         // ── IoT Dashboard API ─────────────────────────────────────────────────
         Route::prefix('iot')->name('iot.')->group(function () {
             Route::get('status',                    [IotController::class, 'status'])->name('status');
-            Route::get('machines/{machine}/chart',  [IotController::class, 'machineChart'])->name('machine.chart');
-            Route::get('machines/{machine}/export', [IotController::class, 'machineExport'])->name('machine.export');
+            Route::get('machines/{machine}/chart',    [IotController::class, 'machineChart'])->name('machine.chart');
+            Route::get('machines/{machine}/timeline', [IotController::class, 'machineTimeline'])->name('machine.timeline');
+            Route::get('machines/{machine}/export',   [IotController::class, 'machineExport'])->name('machine.export');
 
             // OEE from IoT pulse data (part_count / part_reject signals)
             Route::get('oee',                    [\App\Http\Controllers\Api\V1\Iot\OeeController::class, 'factoryOee'])->name('oee.factory');

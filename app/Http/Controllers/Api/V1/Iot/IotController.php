@@ -354,6 +354,107 @@ class IotController extends Controller
         ]);
     }
 
+    // ── State Timeline ────────────────────────────────────────
+
+    /**
+     * GET /api/v1/iot/machines/{machine}/timeline?shift_id=1&date=Y-m-d
+     * GET /api/v1/iot/machines/{machine}/timeline?hours=24
+     *
+     * Returns machine state segments (running / idle / alarm / standby / offline)
+     * bucketed into 5-minute intervals and merged into consecutive runs.
+     * Used by the horizontal Gantt timeline chart on the IoT dashboard.
+     */
+    public function machineTimeline(Request $request, Machine $machine): JsonResponse
+    {
+        $this->authorize('view', $machine);
+
+        [$since, $until] = $this->resolveTimeWindow($request);
+
+        $bucketSec = 300; // 5-minute buckets
+        $sinceTs   = $since->timestamp;
+        $untilTs   = $until->timestamp;
+        $totalMin  = (int) round(($untilTs - $sinceTs) / 60);
+
+        if ($totalMin <= 0) {
+            return response()->json([
+                'window_from' => $since->format('H:i'),
+                'window_to'   => $until->format('H:i'),
+                'total_min'   => 0,
+                'segments'    => [],
+                'summary_min' => (object) [],
+            ]);
+        }
+
+        // Bucket logs: count state signals per 5-min slot
+        $rows = DB::table('iot_logs')
+            ->where('machine_id', $machine->id)
+            ->where('logged_at', '>=', $since)
+            ->where('logged_at', '<',  $until)
+            ->selectRaw("
+                FLOOR(UNIX_TIMESTAMP(logged_at) / {$bucketSec}) * {$bucketSec} AS bucket_ts,
+                SUM(CASE WHEN alarm_code  > 0                                          THEN 1 ELSE 0 END) AS alarm_c,
+                SUM(CASE WHEN cycle_state = 1                                          THEN 1 ELSE 0 END) AS run_c,
+                SUM(CASE WHEN auto_mode  = 1 AND cycle_state = 0 AND alarm_code = 0   THEN 1 ELSE 0 END) AS idle_c
+            ")
+            ->groupByRaw("FLOOR(UNIX_TIMESTAMP(logged_at) / {$bucketSec}) * {$bucketSec}")
+            ->orderBy('bucket_ts')
+            ->get();
+
+        // Index by string key for safe lookup (avoids int/float key collisions)
+        $byTs = $rows->mapWithKeys(fn ($r) => [(string)(int) $r->bucket_ts => $r]);
+
+        // Walk every 5-min slot in the window and assign a state
+        $firstSlot = (int) floor($sinceTs / $bucketSec) * $bucketSec;
+        $segments  = [];
+        $segState  = null;
+        $segFromTs = $sinceTs;
+
+        for ($ts = $firstSlot; $ts < $untilTs; $ts += $bucketSec) {
+            $row = $byTs->get((string) $ts);
+
+            if ($row) {
+                if ($row->alarm_c > 0)    $state = 'alarm';
+                elseif ($row->run_c > 0)  $state = 'running';
+                elseif ($row->idle_c > 0) $state = 'idle';
+                else                       $state = 'standby';
+            } else {
+                $state = 'offline';
+            }
+
+            if ($state !== $segState) {
+                if ($segState !== null) {
+                    $this->pushTimelineSegment(
+                        $segments, $segState, $segFromTs,
+                        max($ts, $sinceTs), $since, $sinceTs
+                    );
+                }
+                $segState  = $state;
+                $segFromTs = max($ts, $sinceTs);
+            }
+        }
+
+        // Flush final segment
+        if ($segState !== null) {
+            $this->pushTimelineSegment(
+                $segments, $segState, $segFromTs, $untilTs, $since, $sinceTs
+            );
+        }
+
+        // Build summary
+        $summary = array_fill_keys(['running', 'idle', 'alarm', 'standby', 'offline'], 0);
+        foreach ($segments as $seg) {
+            $summary[$seg['state']] += $seg['duration_min'];
+        }
+
+        return response()->json([
+            'window_from' => $since->format('H:i'),
+            'window_to'   => $until->format('H:i'),
+            'total_min'   => $totalMin,
+            'segments'    => $segments,
+            'summary_min' => $summary,
+        ]);
+    }
+
     // ── CSV export (API) ──────────────────────────────────────
 
     /**
@@ -437,6 +538,29 @@ class IotController extends Controller
         $until = now();
 
         return [$since, $until, $hours];
+    }
+
+    private function pushTimelineSegment(
+        array  &$segments,
+        string  $state,
+        int     $fromTs,
+        int     $toTs,
+        Carbon  $since,
+        int     $sinceTs
+    ): void {
+        $fromMin = (int) round(($fromTs - $sinceTs) / 60);
+        $toMin   = (int) round(($toTs   - $sinceTs) / 60);
+        if ($toMin <= $fromMin) {
+            return;
+        }
+        $segments[] = [
+            'state'        => $state,
+            'from_min'     => $fromMin,
+            'to_min'       => $toMin,
+            'duration_min' => $toMin - $fromMin,
+            'from_label'   => $since->copy()->addMinutes($fromMin)->format('H:i'),
+            'to_label'     => $since->copy()->addMinutes($toMin)->format('H:i'),
+        ];
     }
 
     private function resolveDevice(Request $request, array $payload): ?Machine

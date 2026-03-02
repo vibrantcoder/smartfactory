@@ -278,6 +278,108 @@
         {{-- ── Scrollable content ────────────────────────────── --}}
         <div class="flex-1 overflow-y-auto p-6 space-y-5">
 
+            {{-- ── Row 0: Machine State Timeline ────────────── --}}
+            <div class="bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
+
+                {{-- Header --}}
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Machine State Timeline</h3>
+                        <span class="text-xs text-slate-600"
+                              x-text="timelineData ? timelineData.window_from + ' – ' + timelineData.window_to : ''"></span>
+                    </div>
+                    <div x-show="timelineLoading" class="flex items-center gap-1.5 text-xs text-slate-500">
+                        <svg class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        Loading…
+                    </div>
+                </div>
+
+                {{-- Content when data is available --}}
+                <template x-if="timelineData && timelineData.segments.length > 0">
+                    <div>
+                        {{-- Summary pills --}}
+                        <div class="flex flex-wrap gap-2 mb-4 text-[11px]">
+                            <span class="flex items-center gap-1.5 rounded-full bg-green-900/30 border border-green-700/30 px-2.5 py-1 text-green-400 font-medium">
+                                <span class="h-2 w-2 rounded-full bg-green-500 shrink-0"></span>
+                                Running
+                                <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.running)"></span>
+                            </span>
+                            <span class="flex items-center gap-1.5 rounded-full bg-yellow-900/30 border border-yellow-700/30 px-2.5 py-1 text-yellow-400 font-medium">
+                                <span class="h-2 w-2 rounded-full bg-yellow-400 shrink-0"></span>
+                                Idle
+                                <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.idle)"></span>
+                            </span>
+                            <span class="flex items-center gap-1.5 rounded-full bg-red-900/30 border border-red-700/30 px-2.5 py-1 text-red-400 font-medium">
+                                <span class="h-2 w-2 rounded-full bg-red-500 shrink-0"></span>
+                                Alarm
+                                <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.alarm)"></span>
+                            </span>
+                            <span class="flex items-center gap-1.5 rounded-full bg-blue-900/30 border border-blue-700/30 px-2.5 py-1 text-blue-400 font-medium">
+                                <span class="h-2 w-2 rounded-full bg-blue-500 shrink-0"></span>
+                                Standby
+                                <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.standby)"></span>
+                            </span>
+                            <template x-if="timelineData.summary_min.offline > 0">
+                                <span class="flex items-center gap-1.5 rounded-full bg-slate-800/60 border border-slate-700/40 px-2.5 py-1 text-slate-500 font-medium">
+                                    <span class="h-2 w-2 rounded-full bg-slate-600 shrink-0"></span>
+                                    Offline
+                                    <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.offline)"></span>
+                                </span>
+                            </template>
+                        </div>
+
+                        {{-- ── Timeline bar ── --}}
+                        <div class="relative">
+                            {{-- Colored segment bar --}}
+                            <div class="flex h-12 w-full rounded-xl overflow-hidden border border-slate-700/30 shadow-inner">
+                                <template x-for="seg in timelineData.segments" :key="seg.from_min + ':' + seg.state">
+                                    <div
+                                        :style="`width: ${seg.duration_min / timelineData.total_min * 100}%; background-color: ${timelineSegColor(seg.state)};`"
+                                        class="h-full relative group cursor-default transition-opacity hover:opacity-80"
+                                        :title="`${seg.state.toUpperCase()}\n${seg.from_label} – ${seg.to_label}\n${seg.duration_min} min`"
+                                    >
+                                        {{-- Label inside wide segments (> 15% of width) --}}
+                                        <template x-if="seg.duration_min / timelineData.total_min > 0.15">
+                                            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white/80 uppercase tracking-wider select-none pointer-events-none drop-shadow">
+                                                <span x-text="seg.state === 'in_progress' ? 'RUN' : seg.state.slice(0,3).toUpperCase()"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+
+                            {{-- Time axis tick marks --}}
+                            <div class="relative mt-1.5 h-5 select-none">
+                                <template x-for="tick in timelineTicks" :key="tick.min">
+                                    <span
+                                        class="absolute top-0 text-[10px] text-slate-500 -translate-x-1/2 tabular-nums"
+                                        :style="`left: ${tick.pct}%`"
+                                        x-text="tick.label"
+                                    ></span>
+                                </template>
+                                {{-- Tick lines --}}
+                                <template x-for="tick in timelineTicks" :key="'l' + tick.min">
+                                    <span
+                                        class="absolute -top-0.5 h-1.5 w-px bg-slate-600"
+                                        :style="`left: ${tick.pct}%`"
+                                    ></span>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                {{-- Empty state --}}
+                <template x-if="!timelineLoading && (!timelineData || timelineData.segments.length === 0)">
+                    <div class="flex items-center justify-center h-16 text-slate-600 text-sm">
+                        No telemetry data for this period
+                    </div>
+                </template>
+            </div>
+
             {{-- Row 1: Gauge grid + Live telemetry --}}
             <div class="grid grid-cols-3 gap-5">
 
@@ -835,6 +937,9 @@ function iotDashboard(apiToken, factoryId, factories) {
         oeeDate:    new Date().toISOString().split('T')[0],
         oeeLoading: false,
 
+        timelineData:    null,
+        timelineLoading: false,
+
         _refreshTimer:   null,
         _countdownTimer: null,
         _charts: {},
@@ -903,6 +1008,28 @@ function iotDashboard(apiToken, factoryId, factories) {
                 uptime:     this.fmtHHMM(upSec),
                 uptimeLabel: this.fmtHrMin(upSec),
             };
+        },
+
+        // Hourly (or 30-min) tick marks for the timeline x-axis
+        get timelineTicks() {
+            if (!this.timelineData || !this.timelineData.total_min) return [];
+            const total = this.timelineData.total_min;
+            // Choose a readable tick step based on window length
+            const step  = total <= 90 ? 15 : total <= 240 ? 30 : 60;
+            const [sh, sm] = this.timelineData.window_from.split(':').map(Number);
+            const sinceMin  = sh * 60 + sm;
+            const ticks     = [];
+            for (let m = 0; m <= total; m += step) {
+                const abs = sinceMin + m;
+                const h   = Math.floor(abs / 60) % 24;
+                const mm  = abs % 60;
+                ticks.push({
+                    min:   m,
+                    pct:   (m / total * 100),
+                    label: `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`,
+                });
+            }
+            return ticks;
         },
 
         // ── Lifecycle ─────────────────────────────────────────
@@ -1011,6 +1138,27 @@ function iotDashboard(apiToken, factoryId, factories) {
             await this.$nextTick();
             this.renderCharts();
             this.renderGauges();
+            this.loadTimeline(machineId); // fire-and-forget; independent of chart render
+        },
+
+        async loadTimeline(machineId) {
+            this.timelineLoading = true;
+            this.timelineData    = null;
+            try {
+                let url;
+                if (this.selectedShiftId && this.chartDate) {
+                    url = `/api/v1/iot/machines/${machineId}/timeline?shift_id=${this.selectedShiftId}&date=${this.chartDate}`;
+                } else {
+                    url = `/api/v1/iot/machines/${machineId}/timeline?hours=24`;
+                }
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
+                });
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                this.timelineData = await res.json();
+            } catch { /* silent — timeline is optional enhancement */ } finally {
+                this.timelineLoading = false;
+            }
         },
 
         // ── Machine selection ─────────────────────────────────
@@ -1033,6 +1181,7 @@ function iotDashboard(apiToken, factoryId, factories) {
         closeDetail() {
             this.detailOpen      = false;
             this.selectedShiftId = '';
+            this.timelineData    = null;
             this.destroyCharts();
             setTimeout(() => { this.selectedMachine = null; }, 250);
         },
@@ -1047,6 +1196,20 @@ function iotDashboard(apiToken, factoryId, factories) {
             this.refresh();
             this.loadOee();
             this.loadShifts(this.currentFactoryId);
+        },
+
+        // ── Timeline helpers ──────────────────────────────────
+
+        timelineSegColor(state) {
+            const c = { running: '#22c55e', idle: '#eab308', alarm: '#ef4444', standby: '#3b82f6', offline: '#1e293b' };
+            return c[state] || c.offline;
+        },
+
+        fmtMin(minutes) {
+            if (!minutes) return '0m';
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            return h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}` : `${m}m`;
         },
 
         // ── Chart rendering ───────────────────────────────────

@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\Dashboard\DashboardController;
 use App\Http\Controllers\Admin\Iot\IotDashboardController;
 use App\Http\Controllers\Admin\Part\PartRoutingController;
 use App\Http\Controllers\Admin\Production\CustomerController as AdminCustomerController;
+use App\Http\Controllers\Admin\Production\ProductionPlanController as AdminProductionPlanController;
 use App\Http\Controllers\Admin\Role\RoleController;
 use App\Http\Controllers\Admin\User\UserController;
 use App\Domain\Production\Models\Part;
@@ -56,6 +57,11 @@ Route::middleware(['auth:web', 'factory.scope'])
             Route::get('/', [PartRoutingController::class, 'index'])->name('index');
             Route::get('/{part}/routing', [PartRoutingController::class, 'edit'])->name('routing.edit');
             Route::get('/{part}', fn (Part $part) => redirect()->route('admin.parts.index'))->name('show');
+        });
+
+        // Production Planning Calendar
+        Route::prefix('production')->name('production.')->group(function () {
+            Route::get('/plans', [AdminProductionPlanController::class, 'index'])->name('plans.index');
         });
 
         // IoT Dashboard

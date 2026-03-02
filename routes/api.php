@@ -73,6 +73,9 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
                 [\App\Http\Controllers\Api\V1\Production\ProductionAnalysisController::class, 'factoryDailyTargets']);
         });
 
+        // ── Shifts (used by IoT dashboard shift selector) ─────────────────────
+        Route::get('shifts', [IotController::class, 'shifts'])->name('shifts');
+
         // ── IoT Dashboard API ─────────────────────────────────────────────────
         Route::prefix('iot')->name('iot.')->group(function () {
             Route::get('status',                    [IotController::class, 'status'])->name('status');

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1\Iot;
 use App\Domain\Machine\Models\IotLog;
 use App\Domain\Machine\Models\Machine;
 use App\Domain\Machine\Repositories\Contracts\MachineRepositoryInterface;
+use App\Domain\Production\Models\Shift;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -148,6 +149,34 @@ class IotController extends Controller
         ], 201);
     }
 
+    // ── Shifts list ───────────────────────────────────────────
+
+    /**
+     * GET /api/v1/shifts
+     *
+     * Returns all active shifts for the authenticated user's factory
+     * (or ?factory_id= for super-admin). Used to populate the shift
+     * selector on the IoT machine detail dashboard.
+     */
+    public function shifts(Request $request): JsonResponse
+    {
+        $user      = $request->user();
+        $factoryId = $user->factory_id
+            ?? ($request->has('factory_id') ? $request->integer('factory_id') : null);
+
+        $query = Shift::where('is_active', true)->orderBy('start_time');
+
+        if ($factoryId !== null) {
+            $query->forFactory($factoryId);
+        } else {
+            $query->forAnyFactory();
+        }
+
+        return response()->json([
+            'data' => $query->get(['id', 'name', 'start_time', 'end_time', 'duration_min']),
+        ]);
+    }
+
     // ── Status snapshot ───────────────────────────────────────
 
     /**
@@ -210,6 +239,7 @@ class IotController extends Controller
 
             return [
                 'id'             => $machine->id,
+                'factory_id'     => $machine->factory_id,
                 'name'           => $machine->name,
                 'code'           => $machine->code,
                 'type'           => $machine->type,
@@ -243,14 +273,16 @@ class IotController extends Controller
     {
         $this->authorize('view', $machine);
 
-        $hours = (int) $request->query('hours', 24);
-        $hours = max(1, min(168, $hours));
+        // Shift-based window takes priority over hours
+        [$since, $until, $hours] = $this->resolveTimeWindow($request);
 
-        $since = now()->subHours($hours);
 
-        $rows = DB::table('iot_logs')
+        $baseQuery = DB::table('iot_logs')
             ->where('machine_id', $machine->id)
             ->where('logged_at', '>=', $since)
+            ->where('logged_at', '<', $until);
+
+        $rows = (clone $baseQuery)
             ->selectRaw("
                 DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')    AS hour,
                 COALESCE(SUM(part_count),  0)                  AS parts_sum,
@@ -263,9 +295,7 @@ class IotController extends Controller
             ->get();
 
         // Time-state breakdown for the whole period
-        $ts = DB::table('iot_logs')
-            ->where('machine_id', $machine->id)
-            ->where('logged_at', '>=', $since)
+        $ts = (clone $baseQuery)
             ->selectRaw("
                 COUNT(*)                                                                        AS total_samples,
                 SUM(CASE WHEN cycle_state = 1 THEN 1 ELSE 0 END)                               AS run_ticks,
@@ -336,12 +366,10 @@ class IotController extends Controller
     {
         $this->authorize('view', $machine);
 
-        $hours    = (int) $request->query('hours', 24);
-        $hours    = max(1, min(168, $hours));
-        $since    = now()->subHours($hours);
+        [$since, $until] = $this->resolveTimeWindow($request);
         $filename = 'iot-' . $machine->code . '-' . now()->format('Ymd-His') . '.csv';
 
-        return response()->streamDownload(function () use ($machine, $since) {
+        return response()->streamDownload(function () use ($machine, $since, $until) {
             $handle = fopen('php://output', 'w');
 
             fputcsv($handle, [
@@ -352,6 +380,7 @@ class IotController extends Controller
             IotLog::query()
                 ->where('machine_id', $machine->id)
                 ->where('logged_at', '>=', $since)
+                ->where('logged_at', '<',  $until)
                 ->orderBy('logged_at')
                 ->chunk(1000, function ($logs) use ($handle) {
                     foreach ($logs as $log) {
@@ -373,6 +402,42 @@ class IotController extends Controller
     }
 
     // ── Private helpers ───────────────────────────────────────
+
+    /**
+     * Resolve time window from request.
+     *
+     * Priority:
+     *   1. shift_id + date  → shift's start_time to end_time on that date
+     *   2. hours            → now() minus N hours
+     *
+     * Returns [$since, $until, $hours]
+     */
+    private function resolveTimeWindow(Request $request): array
+    {
+        $shiftId = $request->query('shift_id');
+        $date    = $request->query('date');
+
+        if ($shiftId && $date) {
+            $shift = Shift::find((int) $shiftId);
+            if ($shift) {
+                $since = Carbon::parse($date . ' ' . $shift->start_time);
+                $until = Carbon::parse($date . ' ' . $shift->end_time);
+                // Overnight shift: end_time is on the next calendar day
+                if ($until->lte($since)) {
+                    $until->addDay();
+                }
+                $hours = (int) ceil($since->diffInMinutes($until) / 60);
+                return [$since, $until, $hours];
+            }
+        }
+
+        $hours = (int) $request->query('hours', 24);
+        $hours = max(1, min(168, $hours));
+        $since = now()->subHours($hours);
+        $until = now();
+
+        return [$since, $until, $hours];
+    }
 
     private function resolveDevice(Request $request, array $payload): ?Machine
     {

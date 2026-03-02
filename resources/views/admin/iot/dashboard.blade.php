@@ -109,20 +109,32 @@
 
             <div class="h-6 w-px bg-slate-700"></div>
 
-            {{-- Period buttons --}}
-            <div class="flex rounded-lg border border-slate-600 overflow-hidden text-xs">
-                <template x-for="h in [6, 12, 24, 48]" :key="h">
-                    <button
-                        @click="chartHours = h; loadChart(selectedMachine.id)"
-                        :class="['px-3 py-1.5 font-medium transition-colors', chartHours === h ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700']"
-                        x-text="h + 'h'"
-                    ></button>
+            {{-- Date picker --}}
+            <input
+                type="date"
+                x-model="chartDate"
+                @change="loadChart(selectedMachine.id)"
+                class="rounded-lg bg-slate-800 border border-slate-600 text-slate-200 text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+
+            {{-- Shift selector --}}
+            <select
+                x-model="selectedShiftId"
+                @change="loadChart(selectedMachine.id)"
+                class="rounded-lg bg-slate-800 border border-slate-600 text-slate-200 text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[200px] truncate"
+            >
+                <option value="">All Day (24h)</option>
+                <template x-for="s in shifts" :key="s.id">
+                    <option
+                        :value="s.id"
+                        x-text="s.name + ' (' + s.start_time.slice(0,5) + '–' + s.end_time.slice(0,5) + ')'"
+                    ></option>
                 </template>
-            </div>
+            </select>
 
             {{-- CSV export --}}
             <a
-                :href="'/admin/iot/machines/' + (selectedMachine?.id) + '/export?hours=' + chartHours"
+                :href="exportUrl"
                 class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
             >
                 <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -174,7 +186,7 @@
 
                 {{-- Parts produced (chart period) --}}
                 <div class="text-center px-4">
-                    <p class="text-xs uppercase tracking-widest text-slate-400 mb-0.5">Parts <span class="normal-case" x-text="'(' + chartHours + 'h)'"></span></p>
+                    <p class="text-xs uppercase tracking-widest text-slate-400 mb-0.5">Parts <span class="normal-case" x-text="selectedShiftObj ? '(' + selectedShiftObj.name + ')' : '(24h)'"></span></p>
                     <p class="text-2xl font-bold leading-none text-white"
                        x-text="machinePartsTotals.total.toLocaleString()">
                     </p>
@@ -809,6 +821,10 @@ function iotDashboard(apiToken, factoryId, factories) {
         chartData:    null,
         chartHours:   24,
 
+        shifts:          [],
+        selectedShiftId: '',
+        chartDate:       new Date().toISOString().split('T')[0],
+
         loading:      false,
         chartLoading: false,
         error:        null,
@@ -857,6 +873,19 @@ function iotDashboard(apiToken, factoryId, factories) {
             };
         },
 
+        get selectedShiftObj() {
+            if (!this.selectedShiftId) return null;
+            return this.shifts.find(s => s.id == this.selectedShiftId) || null;
+        },
+
+        get exportUrl() {
+            const base = '/admin/iot/machines/' + (this.selectedMachine?.id) + '/export';
+            if (this.selectedShiftId && this.chartDate) {
+                return base + '?shift_id=' + this.selectedShiftId + '&date=' + this.chartDate;
+            }
+            return base + '?hours=24';
+        },
+
         get machineTimeStats() {
             const ts = this.chartData?.time_stats;
             if (!ts || ts.total_samples === 0) return null;
@@ -881,6 +910,7 @@ function iotDashboard(apiToken, factoryId, factories) {
         init() {
             this.refresh();
             this.loadOee();
+            this.loadShifts();
             this._refreshTimer   = setInterval(() => this.refresh(), 5000);
             this._countdownTimer = setInterval(() => {
                 this.countdown = Math.max(0, this.countdown - 1);
@@ -941,17 +971,37 @@ function iotDashboard(apiToken, factoryId, factories) {
             }
         },
 
+        async loadShifts(factoryId) {
+            const fid = factoryId ?? this.currentFactoryId;
+            if (!fid) return;
+            try {
+                const res = await fetch(`/api/v1/shifts?factory_id=${fid}`, {
+                    headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
+                });
+                if (!res.ok) return;
+                const json  = await res.json();
+                this.shifts = json.data || [];
+            } catch { /* silent */ }
+        },
+
         async loadChart(machineId) {
             this.chartLoading = true;
             this.chartData    = null;
             this.error        = null;
 
             try {
-                const res = await fetch(`/api/v1/iot/machines/${machineId}/chart?hours=${this.chartHours}`, {
+                let url;
+                if (this.selectedShiftId && this.chartDate) {
+                    url = `/api/v1/iot/machines/${machineId}/chart?shift_id=${this.selectedShiftId}&date=${this.chartDate}`;
+                } else {
+                    url = `/api/v1/iot/machines/${machineId}/chart?hours=24`;
+                }
+                const res = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
                 });
                 if (!res.ok) throw new Error(`Status ${res.status}`);
                 this.chartData = await res.json();
+                this.chartHours = this.chartData.period_hours || 24;
             } catch (e) {
                 this.error = 'Failed to load chart data: ' + e.message;
             } finally {
@@ -967,7 +1017,11 @@ function iotDashboard(apiToken, factoryId, factories) {
 
         async selectMachine(machine) {
             this.selectedMachine = machine;
+            this.selectedShiftId = '';
+            this.chartDate       = this.oeeDate; // sync with OEE date picker
             this.detailOpen      = true;
+            // Load shifts for this machine's factory (may differ from global selector)
+            await this.loadShifts(machine.factory_id || this.currentFactoryId);
             await this.loadChart(machine.id);
         },
 
@@ -977,7 +1031,8 @@ function iotDashboard(apiToken, factoryId, factories) {
         },
 
         closeDetail() {
-            this.detailOpen = false;
+            this.detailOpen      = false;
+            this.selectedShiftId = '';
             this.destroyCharts();
             setTimeout(() => { this.selectedMachine = null; }, 250);
         },
@@ -985,10 +1040,13 @@ function iotDashboard(apiToken, factoryId, factories) {
         switchFactory(id) {
             this.currentFactoryId = id || null;
             this.selectedMachine  = null;
+            this.selectedShiftId  = '';
+            this.shifts           = [];
             this.detailOpen       = false;
             this.destroyCharts();
             this.refresh();
             this.loadOee();
+            this.loadShifts(this.currentFactoryId);
         },
 
         // ── Chart rendering ───────────────────────────────────

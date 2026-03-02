@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\" -X POST http://127.0.0.1:8000/api/v1/customers -H \"Authorization: Bearer 27|SPNh0zCbTliqg7MHZLvrqnQbHPfGChR5irjmEPE23e6a2146\" -H \"Content-Type: application/json\" -H \"Accept: application/json\" -d '{\"\"name\"\":\"\"Test Customer\"\",\"\"code\"\":\"\"TEST01\"\",\"\"factory_id\"\":1}')"
+    ]
+  }
+}

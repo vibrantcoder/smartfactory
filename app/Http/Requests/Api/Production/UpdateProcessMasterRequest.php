@@ -30,6 +30,7 @@ class UpdateProcessMasterRequest extends FormRequest
             ],
             'standard_time'        => ['nullable', 'numeric', 'min:0.01', 'max:9999.99'],
             'machine_type_default' => ['nullable', 'string', 'max:50'],
+            'process_type'         => ['nullable', 'string', 'in:inhouse,outside'],
             'description'          => ['nullable', 'string', 'max:500'],
             'is_active'            => ['required', 'boolean'],
         ];

@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -211,48 +212,50 @@ class IotController extends Controller
         $machines   = $machineQuery->get();
         $machineIds = $machines->pluck('id');
 
-        $latestLogs = collect();
+        // Cache status for 30 seconds — matches new polling interval
+        $cacheKey = 'iot_status_' . ($factoryId ?? 'all');
+        $data = Cache::remember($cacheKey, 30, function () use ($machines, $machineIds) {
+            $latestLogs = collect();
 
-        if ($machineIds->isNotEmpty()) {
-            // Efficient: one query via self-join on MAX(logged_at) per machine
-            $latestTimes = DB::table('iot_logs')
-                ->whereIn('machine_id', $machineIds)
-                ->select('machine_id', DB::raw('MAX(logged_at) as latest_at'))
-                ->groupBy('machine_id');
+            if ($machineIds->isNotEmpty()) {
+                // Efficient: one query via self-join on MAX(logged_at) per machine
+                $latestTimes = DB::table('iot_logs')
+                    ->whereIn('machine_id', $machineIds)
+                    ->select('machine_id', DB::raw('MAX(logged_at) as latest_at'))
+                    ->groupBy('machine_id');
 
-            $latestLogs = IotLog::joinSub($latestTimes, 'latest', function ($join) {
-                $join->on('iot_logs.machine_id', '=', 'latest.machine_id')
-                     ->on('iot_logs.logged_at', '=', 'latest.latest_at');
-            })
-            ->select('iot_logs.*')
-            ->get()
-            ->keyBy('machine_id');
-        }
+                $latestLogs = IotLog::joinSub($latestTimes, 'latest', function ($join) {
+                    $join->on('iot_logs.machine_id', '=', 'latest.machine_id')
+                         ->on('iot_logs.logged_at', '=', 'latest.latest_at');
+                })
+                ->select('iot_logs.*')
+                ->get()
+                ->keyBy('machine_id');
+            }
 
-        $cutoff = now()->subMinutes(5);
+            $cutoff = now()->subMinutes(5);
 
-        $data = $machines->map(function (Machine $machine) use ($latestLogs, $cutoff): array {
-            /** @var IotLog|null $log */
-            $log = $latestLogs->get($machine->id);
+            return $machines->map(function (Machine $machine) use ($latestLogs, $cutoff): array {
+                $log = $latestLogs->get($machine->id);
+                $iotStatus = $this->deriveStatus($log, $cutoff);
 
-            $iotStatus = $this->deriveStatus($log, $cutoff);
-
-            return [
-                'id'             => $machine->id,
-                'factory_id'     => $machine->factory_id,
-                'name'           => $machine->name,
-                'code'           => $machine->code,
-                'type'           => $machine->type,
-                'machine_status' => $machine->status,
-                'iot_status'     => $iotStatus,
-                'alarm_code'     => $log?->alarm_code ?? 0,
-                'auto_mode'      => (bool) ($log?->auto_mode ?? false),
-                'cycle_state'    => (bool) ($log?->cycle_state ?? false),
-                'part_count'     => $log?->part_count ?? 0,
-                'part_reject'    => $log?->part_reject ?? 0,
-                'slave_name'     => $log?->slave_name,
-                'last_seen'      => $log?->logged_at?->toIso8601String(),
-            ];
+                return [
+                    'id'             => $machine->id,
+                    'factory_id'     => $machine->factory_id,
+                    'name'           => $machine->name,
+                    'code'           => $machine->code,
+                    'type'           => $machine->type,
+                    'machine_status' => $machine->status,
+                    'iot_status'     => $iotStatus,
+                    'alarm_code'     => $log?->alarm_code ?? 0,
+                    'auto_mode'      => (bool) ($log?->auto_mode ?? false),
+                    'cycle_state'    => (bool) ($log?->cycle_state ?? false),
+                    'part_count'     => $log?->part_count ?? 0,
+                    'part_reject'    => $log?->part_reject ?? 0,
+                    'slave_name'     => $log?->slave_name,
+                    'last_seen'      => $log?->logged_at?->toIso8601String(),
+                ];
+            });
         });
 
         return response()->json(['data' => $data]);
@@ -297,11 +300,11 @@ class IotController extends Controller
         // Time-state breakdown for the whole period
         $ts = (clone $baseQuery)
             ->selectRaw("
-                COUNT(*)                                                                        AS total_samples,
-                SUM(CASE WHEN cycle_state = 1 THEN 1 ELSE 0 END)                               AS run_ticks,
-                SUM(CASE WHEN auto_mode = 1 AND cycle_state = 0 AND alarm_code = 0 THEN 1 ELSE 0 END) AS idle_ticks,
-                SUM(CASE WHEN alarm_code > 0 THEN 1 ELSE 0 END)                                AS alarm_ticks,
-                TIMESTAMPDIFF(SECOND, MIN(logged_at), MAX(logged_at))                          AS span_seconds
+                COUNT(*)                                                                                     AS total_samples,
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 1                            THEN 1 ELSE 0 END) AS run_ticks,
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0 AND auto_mode = 1          THEN 1 ELSE 0 END) AS idle_ticks,
+                SUM(CASE WHEN alarm_code > 0                                                 THEN 1 ELSE 0 END) AS alarm_ticks,
+                TIMESTAMPDIFF(SECOND, MIN(logged_at), MAX(logged_at))                                          AS span_seconds
             ")
             ->first();
 
@@ -385,32 +388,37 @@ class IotController extends Controller
             ]);
         }
 
-        // Bucket logs: count state signals per 5-min slot
+        // Bucket logs: count state signals per 5-min slot.
+        // Use TIMESTAMPDIFF (relative to window start) instead of UNIX_TIMESTAMP so that
+        // the bucket number is timezone-independent — UNIX_TIMESTAMP() applies the MySQL
+        // server's local timezone which may differ from PHP/app timezone (UTC).
+        $sinceStr = $since->format('Y-m-d H:i:s');
         $rows = DB::table('iot_logs')
             ->where('machine_id', $machine->id)
             ->where('logged_at', '>=', $since)
             ->where('logged_at', '<',  $until)
             ->selectRaw("
-                FLOOR(UNIX_TIMESTAMP(logged_at) / {$bucketSec}) * {$bucketSec} AS bucket_ts,
+                FLOOR(TIMESTAMPDIFF(SECOND, '{$sinceStr}', logged_at) / {$bucketSec}) AS bucket_num,
                 SUM(CASE WHEN alarm_code  > 0                                          THEN 1 ELSE 0 END) AS alarm_c,
                 SUM(CASE WHEN cycle_state = 1                                          THEN 1 ELSE 0 END) AS run_c,
                 SUM(CASE WHEN auto_mode  = 1 AND cycle_state = 0 AND alarm_code = 0   THEN 1 ELSE 0 END) AS idle_c
             ")
-            ->groupByRaw("FLOOR(UNIX_TIMESTAMP(logged_at) / {$bucketSec}) * {$bucketSec}")
-            ->orderBy('bucket_ts')
+            ->groupByRaw("FLOOR(TIMESTAMPDIFF(SECOND, '{$sinceStr}', logged_at) / {$bucketSec})")
+            ->orderBy('bucket_num')
             ->get();
 
-        // Index by string key for safe lookup (avoids int/float key collisions)
-        $byTs = $rows->mapWithKeys(fn ($r) => [(string)(int) $r->bucket_ts => $r]);
+        // Index by bucket number (0 = first 5-min slot, 1 = next, …)
+        $byBucket = $rows->mapWithKeys(fn ($r) => [(string)(int) $r->bucket_num => $r]);
 
         // Walk every 5-min slot in the window and assign a state
-        $firstSlot = (int) floor($sinceTs / $bucketSec) * $bucketSec;
-        $segments  = [];
-        $segState  = null;
-        $segFromTs = $sinceTs;
+        $totalBuckets = (int) ceil(($untilTs - $sinceTs) / $bucketSec);
+        $segments     = [];
+        $segState     = null;
+        $segFromTs    = $sinceTs;
 
-        for ($ts = $firstSlot; $ts < $untilTs; $ts += $bucketSec) {
-            $row = $byTs->get((string) $ts);
+        for ($bucket = 0; $bucket < $totalBuckets; $bucket++) {
+            $ts  = $sinceTs + ($bucket * $bucketSec);
+            $row = $byBucket->get((string) $bucket);
 
             if ($row) {
                 if ($row->alarm_c > 0)    $state = 'alarm';
@@ -425,11 +433,11 @@ class IotController extends Controller
                 if ($segState !== null) {
                     $this->pushTimelineSegment(
                         $segments, $segState, $segFromTs,
-                        max($ts, $sinceTs), $since, $sinceTs
+                        $ts, $since, $sinceTs
                     );
                 }
                 $segState  = $state;
-                $segFromTs = max($ts, $sinceTs);
+                $segFromTs = $ts;
             }
         }
 

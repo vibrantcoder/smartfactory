@@ -20,6 +20,7 @@ readonly class ProcessMasterData
         public string  $code,
         public ?float  $standardTime,
         public ?string $machineTypeDefault,
+        public string  $processType,
         public ?string $description,
         public bool    $isActive,
     ) {}
@@ -33,6 +34,7 @@ readonly class ProcessMasterData
                                     ? (float) $request->validated('standard_time')
                                     : null,
             machineTypeDefault: $request->validated('machine_type_default'),
+            processType:        $request->validated('process_type') ?? 'inhouse',
             description:        $request->validated('description'),
             isActive:           true,
         );
@@ -47,6 +49,7 @@ readonly class ProcessMasterData
                                     ? (float) $request->validated('standard_time')
                                     : null,
             machineTypeDefault: $request->validated('machine_type_default'),
+            processType:        $request->validated('process_type') ?? 'inhouse',
             description:        $request->validated('description'),
             isActive:           (bool) $request->validated('is_active', true),
         );
@@ -59,6 +62,7 @@ readonly class ProcessMasterData
             'code'                 => $this->code,
             'standard_time'        => $this->standardTime,
             'machine_type_default' => $this->machineTypeDefault,
+            'process_type'         => $this->processType,
             'description'          => $this->description,
             'is_active'            => $this->isActive,
         ];

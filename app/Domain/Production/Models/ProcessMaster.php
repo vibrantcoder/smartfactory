@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string      $code                  e.g. "LASER" — globally unique
  * @property float|null  $standard_time         minutes per cycle (default)
  * @property string|null $machine_type_default  default machine type for routing steps
+ * @property string      $process_type          'inhouse' or 'outside'
  * @property string|null $description
  * @property bool        $is_active
  *
@@ -41,6 +42,7 @@ class ProcessMaster extends BaseModel
         'code',
         'standard_time',
         'machine_type_default',
+        'process_type',
         'description',
         'is_active',
     ];

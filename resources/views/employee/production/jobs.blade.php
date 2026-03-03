@@ -1,0 +1,142 @@
+@extends('employee.layouts.app')
+@section('title', 'My Jobs')
+
+@section('content')
+
+<div class="mb-5 flex items-center justify-between">
+    <div>
+        <h2 class="text-lg font-bold text-gray-900">My Production Jobs</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Last 7 days &amp; next 14 days</p>
+    </div>
+    <a href="{{ route('employee.dashboard') }}"
+       class="text-xs font-medium text-indigo-600 hover:underline">
+        ← Back to Dashboard
+    </a>
+</div>
+
+{{-- Legend --}}
+<div class="flex flex-wrap gap-2 mb-4 text-xs text-gray-500">
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-1 text-indigo-700 font-medium">
+        <span class="h-2 w-2 rounded-full bg-indigo-500"></span>In Progress
+    </span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-blue-700 font-medium">
+        <span class="h-2 w-2 rounded-full bg-blue-500"></span>Scheduled
+    </span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-green-700 font-medium">
+        <span class="h-2 w-2 rounded-full bg-green-500"></span>Completed
+    </span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-gray-600 font-medium">
+        <span class="h-2 w-2 rounded-full bg-gray-400"></span>Draft / Cancelled
+    </span>
+</div>
+
+{{-- Plan cards --}}
+<div class="space-y-3">
+@forelse($plans as $plan)
+@php
+    $goodQty = $plan->totalGoodQty();
+    $rejects = $plan->actuals->sum('defect_qty');
+    $pct     = $plan->planned_qty > 0 ? min(100, round($goodQty / $plan->planned_qty * 100)) : 0;
+
+    $statusDot = match($plan->status) {
+        'in_progress' => 'bg-indigo-500',
+        'scheduled'   => 'bg-blue-500',
+        'completed'   => 'bg-green-500',
+        'cancelled'   => 'bg-red-400',
+        default       => 'bg-gray-400',
+    };
+    $statusBadge = match($plan->status) {
+        'in_progress' => 'bg-indigo-100 text-indigo-700',
+        'scheduled'   => 'bg-blue-100 text-blue-700',
+        'completed'   => 'bg-green-100 text-green-700',
+        'cancelled'   => 'bg-red-100 text-red-600',
+        default       => 'bg-gray-100 text-gray-600',
+    };
+    $leftBorder = $plan->status === 'in_progress' ? 'border-l-4 border-l-indigo-500' : '';
+@endphp
+
+<div class="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 overflow-hidden {{ $leftBorder }}">
+    <div class="px-5 py-4">
+        {{-- Top row --}}
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="min-w-0">
+                <p class="font-semibold text-gray-900 text-sm truncate">
+                    {{ $plan->part?->name ?? 'Unknown Part' }}
+                </p>
+                <p class="text-xs text-gray-500 mt-0.5">
+                    Part #{{ $plan->part?->part_number }}
+                    &middot; Cycle: {{ $plan->part?->cycle_time_std ?? '—' }}s
+                </p>
+            </div>
+            <div class="flex flex-col items-end gap-1.5 shrink-0">
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full {{ $statusBadge }}">
+                    {{ ucfirst(str_replace('_', ' ', $plan->status)) }}
+                </span>
+                <span class="text-xs text-gray-400">{{ $plan->planned_date->format('d M Y') }}</span>
+            </div>
+        </div>
+
+        {{-- Details grid --}}
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="rounded-lg bg-slate-50 p-2.5 text-center">
+                <p class="font-bold text-base text-gray-900">{{ number_format($plan->planned_qty) }}</p>
+                <p class="text-gray-400 mt-0.5">Planned</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 p-2.5 text-center">
+                <p class="font-bold text-base text-green-700">{{ number_format($goodQty) }}</p>
+                <p class="text-gray-400 mt-0.5">Good</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 p-2.5 text-center">
+                <p class="font-bold text-base {{ $rejects > 0 ? 'text-red-600' : 'text-gray-400' }}">
+                    {{ number_format($rejects) }}
+                </p>
+                <p class="text-gray-400 mt-0.5">Rejects</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 p-2.5 text-center">
+                <p class="font-bold text-base {{ $pct >= 100 ? 'text-green-700' : ($pct >= 60 ? 'text-indigo-600' : 'text-yellow-600') }}">
+                    {{ $pct }}%
+                </p>
+                <p class="text-gray-400 mt-0.5">Attainment</p>
+            </div>
+        </div>
+
+        {{-- Shift info --}}
+        <div class="mt-3 flex items-center gap-4 text-xs text-gray-500">
+            <span>
+                <span class="font-medium">Shift:</span> {{ $plan->shift?->name ?? '—' }}
+                @if($plan->shift)
+                ({{ substr($plan->shift->start_time,0,5) }}–{{ substr($plan->shift->end_time,0,5) }})
+                @endif
+            </span>
+        </div>
+
+        {{-- Progress bar --}}
+        @if($plan->planned_qty > 0 && in_array($plan->status, ['in_progress', 'scheduled', 'completed']))
+        <div class="mt-3">
+            <div class="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                <div class="h-2 rounded-full transition-all
+                            {{ $pct >= 100 ? 'bg-green-500' : ($pct >= 60 ? 'bg-indigo-500' : 'bg-yellow-400') }}"
+                     style="width: {{ $pct }}%"></div>
+            </div>
+        </div>
+        @endif
+    </div>
+</div>
+@empty
+<div class="flex flex-col items-center justify-center py-16 text-gray-400">
+    <svg class="h-12 w-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    <p class="text-sm font-medium">No jobs found</p>
+    <p class="text-xs mt-1">No production plans for your machine in the past 7 or next 14 days.</p>
+</div>
+@endforelse
+</div>
+
+{{-- Pagination --}}
+@if($plans->hasPages())
+<div class="mt-5">{{ $plans->links() }}</div>
+@endif
+
+@endsection

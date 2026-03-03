@@ -61,7 +61,8 @@ class OeeCalculationService
 
         // ── Aggregate iot_logs in one query ──────────────────────────
         $stats = IotLog::where('machine_id', $machine->id)
-            ->whereBetween('logged_at', [$windowStart, $windowEnd])
+            ->where('logged_at', '>=', $windowStart)
+            ->where('logged_at', '<',  $windowEnd)
             ->selectRaw(
                 'COUNT(*)                                      AS log_count,
                  SUM(CASE WHEN alarm_code > 0 THEN 1 ELSE 0 END) AS alarm_records,

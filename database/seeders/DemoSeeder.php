@@ -101,7 +101,7 @@ class DemoSeeder extends Seeder
         app(PermissionRegistrar::class)->setPermissionsTeamId($factory->id);
         $factoryAdmin->syncRoles([Role::FACTORY_ADMIN->value]);
 
-        // Operator
+        // Operator — assigned to Machine A
         $operator = User::firstOrCreate(
             ['email' => 'operator@demo.local'],
             [
@@ -160,6 +160,9 @@ class DemoSeeder extends Seeder
                 
             ]
         );
+
+        // Assign operator to Machine A (after machines are created)
+        $operator->update(['machine_id' => $machineA->id]);
 
         // ── 7. Create Process Masters ──────────────────────────
         $this->command->info('Creating process masters...');

@@ -136,13 +136,13 @@
                         ></span>
                     </h2>
 
-                    {{-- Total cycle time badge --}}
+                    {{-- Cycle time / part badge --}}
                     <div class="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        <span>Total: <strong x-text="totalCycleTimeFormatted"></strong></span>
+                        <span>Cycle/part: <strong x-text="totalCycleTimeFormatted"></strong></span>
                         <button
                             @click="previewCycleTime"
                             :disabled="previewing || steps.length === 0"
@@ -158,6 +158,39 @@
                             </svg>
                         </button>
                     </div>
+
+                    {{-- Setup time badge --}}
+                    <div x-show="totalSetupTime > 0"
+                         class="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <span>Setup: <strong x-text="totalSetupTimeFormatted"></strong></span>
+                    </div>
+
+                    {{-- Ideal production badge --}}
+                    <template x-if="steps.length > 0 && totalCycleTime > 0">
+                        <div class="flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            <span>Ideal:&nbsp;<strong x-text="idealPerShift + ' pcs'"></strong></span>
+                            <span class="text-green-500">/</span>
+                            <input
+                                x-model.number="shiftMinutes"
+                                type="number"
+                                min="60"
+                                max="1440"
+                                step="30"
+                                class="w-14 rounded border border-green-200 bg-white px-1.5 py-0.5 text-xs text-green-700 focus:border-green-400 focus:outline-none"
+                                title="Shift duration in minutes"
+                            >
+                            <span class="text-green-500">min shift</span>
+                        </div>
+                    </template>
 
                     {{-- Server-confirmed preview result --}}
                     <template x-if="previewResult">
@@ -294,6 +327,45 @@
                                 </div>
                             </div>
 
+                            {{-- Setup time + Process type row --}}
+                            <div class="mt-2 flex items-center gap-4 flex-wrap">
+
+                                {{-- Setup time --}}
+                                <div class="flex items-center gap-1.5">
+                                    <label class="text-xs text-gray-500" :for="`setup-${index}`">Setup (min):</label>
+                                    <input
+                                        :id="`setup-${index}`"
+                                        x-model="step.setupTime"
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        placeholder="0"
+                                        class="w-20 rounded border border-gray-200 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                                    >
+                                </div>
+
+                                {{-- Process type toggle --}}
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-gray-500">Type:</span>
+                                    <div class="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
+                                        <button
+                                            type="button"
+                                            @click="step.processType = 'inhouse'"
+                                            :class="step.processType === 'inhouse'
+                                                ? 'bg-indigo-600 text-white px-2.5 py-1'
+                                                : 'bg-white text-gray-500 hover:bg-gray-50 px-2.5 py-1'"
+                                        >In-house</button>
+                                        <button
+                                            type="button"
+                                            @click="step.processType = 'outside'"
+                                            :class="step.processType === 'outside'
+                                                ? 'bg-amber-500 text-white px-2.5 py-1'
+                                                : 'bg-white text-gray-500 hover:bg-gray-50 px-2.5 py-1'"
+                                        >Outside</button>
+                                    </div>
+                                </div>
+                            </div>
+
                             {{-- Notes --}}
                             <div class="mt-2">
                                 <input
@@ -322,15 +394,54 @@
 
             {{-- Footer summary --}}
             <template x-if="steps.length > 0">
-                <div class="border-t border-gray-100 px-5 py-3 flex items-center justify-between text-xs text-gray-500">
-                    <span x-text="`${steps.length} step${steps.length !== 1 ? 's' : ''}`"></span>
-                    <div class="flex items-center gap-1.5">
-                        <span>Total cycle time:</span>
-                        <span class="font-semibold text-sm text-gray-800" x-text="totalCycleTimeFormatted"></span>
-                        <template x-if="previewResult">
-                            <span class="text-green-600">(server confirmed: <span x-text="`${previewResult.total_cycle_time} min`"></span>)</span>
-                        </template>
+                <div class="border-t border-gray-100 px-5 py-3 space-y-1.5">
+                    {{-- Steps count + cycle time --}}
+                    <div class="flex items-center justify-between text-xs text-gray-500">
+                        <span x-text="`${steps.length} step${steps.length !== 1 ? 's' : ''}`"></span>
+                        <div class="flex items-center gap-1.5">
+                            <span>Cycle time/part:</span>
+                            <span class="font-semibold text-sm text-gray-800" x-text="totalCycleTimeFormatted"></span>
+                            <template x-if="previewResult">
+                                <span class="text-green-600">(server: <span x-text="`${previewResult.total_cycle_time} min`"></span>)</span>
+                            </template>
+                        </div>
                     </div>
+
+                    {{-- Production formula --}}
+                    <template x-if="totalCycleTime > 0">
+                        <div class="rounded-lg bg-gray-50 border border-gray-100 px-4 py-2 text-xs text-gray-600">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-medium text-gray-700">Production formula:</span>
+
+                                {{-- Setup block --}}
+                                <span class="rounded bg-amber-100 px-2 py-0.5 text-amber-800 font-mono">
+                                    Setup <span x-text="totalSetupTime.toFixed(1)"></span> min
+                                </span>
+                                <span class="text-gray-400">+</span>
+
+                                {{-- Qty × cycle --}}
+                                <span class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 font-mono">
+                                    Qty × <span x-text="totalCycleTime.toFixed(2)"></span> min
+                                </span>
+                                <span class="text-gray-400">=</span>
+
+                                {{-- Total shift time --}}
+                                <span class="text-gray-500">
+                                    ≤ <span x-text="shiftMinutes"></span> min shift
+                                </span>
+
+                                <span class="mx-1 text-gray-300">|</span>
+
+                                {{-- Ideal result --}}
+                                <span class="font-semibold text-green-700">
+                                    Ideal: <span x-text="idealPerShift"></span> pcs / shift
+                                </span>
+                                <span class="text-gray-400 text-xs">
+                                    (<span x-text="firstPartTime.toFixed(1)"></span> min to first part)
+                                </span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </template>
 
@@ -359,6 +470,8 @@ function routingBuilder(config) {
                 machineTypeDefault:  s.machine_type_default ?? null,
                 defaultCycleTime:    parseFloat(s.default_cycle_time ?? 0),
                 overrideCycleTime:   s.standard_cycle_time != null ? String(s.standard_cycle_time) : '',
+                setupTime:           s.setup_time != null ? String(s.setup_time) : '',
+                processType:         s.process_type ?? 'inhouse',
                 machineTypeRequired: s.machine_type_required ?? null,
                 notes:               s.notes ?? null,
                 sequenceOrder:       i + 1,
@@ -383,7 +496,11 @@ function routingBuilder(config) {
         saved:         false,
         errorMessage:  null,
         previewResult: null,
+        shiftMinutes:  480,   // default 8-hour shift
 
+        // ── Totals ────────────────────────────────────────────
+
+        // Sum of effective cycle times (per-part production time)
         get totalCycleTime() {
             return this.steps.reduce(function(sum, step) {
                 var override = parseFloat(step.overrideCycleTime);
@@ -398,6 +515,35 @@ function routingBuilder(config) {
             var h = Math.floor(t / 60);
             var m = (t % 60).toFixed(1);
             return h > 0 ? (h + 'h ' + m + 'min') : (m + ' min');
+        },
+
+        // Sum of one-time setup times across all steps
+        get totalSetupTime() {
+            return this.steps.reduce(function(sum, step) {
+                var t = parseFloat(step.setupTime);
+                return sum + (isNaN(t) || step.setupTime === '' ? 0 : t);
+            }, 0);
+        },
+
+        get totalSetupTimeFormatted() {
+            var t = this.totalSetupTime;
+            return t > 0 ? t.toFixed(1) + ' min' : '0 min';
+        },
+
+        // First-part lead time = setup (once) + one cycle
+        get firstPartTime() {
+            return this.totalSetupTime + this.totalCycleTime;
+        },
+
+        // Ideal qty per shift:
+        //   available = shiftMinutes - totalSetupTime
+        //   ideal     = floor(available / cyclePerPart)
+        get idealPerShift() {
+            var cycle = this.totalCycleTime;
+            if (cycle <= 0) return 0;
+            var available = (parseFloat(this.shiftMinutes) || 480) - this.totalSetupTime;
+            if (available <= 0) return 0;
+            return Math.floor(available / cycle);
         },
 
         get filteredPalette() {
@@ -483,6 +629,8 @@ function routingBuilder(config) {
                 machineTypeDefault:  pm.machineType,
                 defaultCycleTime:    pm.standardTime,
                 overrideCycleTime:   '',
+                setupTime:           '',
+                processType:         'inhouse',
                 machineTypeRequired: pm.machineType,
                 notes:               null,
                 sequenceOrder:       this.steps.length + 1,
@@ -537,6 +685,9 @@ function routingBuilder(config) {
                             machine_type_required: s.machineTypeRequired ?? null,
                             standard_cycle_time:   s.overrideCycleTime !== ''
                                 ? parseFloat(s.overrideCycleTime) : null,
+                            setup_time:            s.setupTime !== '' && s.setupTime != null
+                                ? parseFloat(s.setupTime) : null,
+                            process_type:          s.processType ?? 'inhouse',
                             notes:                 s.notes ?? null,
                         };
                     }),
@@ -553,6 +704,8 @@ function routingBuilder(config) {
                             machineTypeDefault:  p.process_master?.machine_type_default ?? null,
                             defaultCycleTime:    parseFloat(p.process_master?.standard_time ?? 0),
                             overrideCycleTime:   p.standard_cycle_time != null ? String(p.standard_cycle_time) : '',
+                            setupTime:           p.setup_time != null ? String(p.setup_time) : '',
+                            processType:         p.process_type ?? 'inhouse',
                             machineTypeRequired: p.machine_type_required ?? null,
                             notes:               p.notes ?? null,
                             sequenceOrder:       p.sequence_order,

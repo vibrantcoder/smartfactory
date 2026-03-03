@@ -113,7 +113,7 @@
             <input
                 type="date"
                 x-model="chartDate"
-                @change="loadChart(selectedMachine.id)"
+                @change="oeeDate = chartDate; loadOee(); loadChart(selectedMachine.id)"
                 class="rounded-lg bg-slate-800 border border-slate-600 text-slate-200 text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
 
@@ -152,8 +152,8 @@
                 <div class="text-center px-4">
                     <p class="text-xs uppercase tracking-widest text-slate-400 mb-0.5">OEE</p>
                     <p class="text-3xl font-extrabold leading-none"
-                       :class="gaugeTextClass(machineFirstOee?.oee_pct)"
-                       x-text="machineFirstOee?.oee_pct !== null && machineFirstOee?.oee_pct !== undefined ? machineFirstOee.oee_pct + '%' : '—'">
+                       :class="gaugeTextClass(machineSelectedOee?.oee_pct)"
+                       x-text="machineSelectedOee?.oee_pct !== null && machineSelectedOee?.oee_pct !== undefined ? machineSelectedOee.oee_pct + '%' : '—'">
                     </p>
                 </div>
 
@@ -161,8 +161,8 @@
                 <div class="text-center px-4">
                     <p class="text-xs uppercase tracking-widest text-slate-400 mb-0.5">Availability</p>
                     <p class="text-2xl font-bold leading-none"
-                       :class="gaugeTextClass(machineFirstOee?.availability_pct)"
-                       x-text="machineFirstOee?.availability_pct !== undefined ? machineFirstOee.availability_pct + '%' : '—'">
+                       :class="gaugeTextClass(machineSelectedOee?.availability_pct)"
+                       x-text="machineSelectedOee?.availability_pct !== undefined ? machineSelectedOee.availability_pct + '%' : '—'">
                     </p>
                 </div>
 
@@ -170,8 +170,8 @@
                 <div class="text-center px-4">
                     <p class="text-xs uppercase tracking-widest text-slate-400 mb-0.5">Performance</p>
                     <p class="text-2xl font-bold leading-none"
-                       :class="gaugeTextClass(machineFirstOee?.performance_pct)"
-                       x-text="machineFirstOee?.performance_pct !== null && machineFirstOee?.performance_pct !== undefined ? machineFirstOee.performance_pct + '%' : '—'">
+                       :class="gaugeTextClass(machineSelectedOee?.performance_pct)"
+                       x-text="machineSelectedOee?.performance_pct !== null && machineSelectedOee?.performance_pct !== undefined ? machineSelectedOee.performance_pct + '%' : '—'">
                     </p>
                 </div>
 
@@ -179,8 +179,8 @@
                 <div class="text-center px-4">
                     <p class="text-xs uppercase tracking-widest text-slate-400 mb-0.5">Quality</p>
                     <p class="text-2xl font-bold leading-none"
-                       :class="gaugeTextClass(machineFirstOee?.quality_pct)"
-                       x-text="machineFirstOee?.quality_pct !== undefined ? machineFirstOee.quality_pct + '%' : '—'">
+                       :class="gaugeTextClass(machineSelectedOee?.quality_pct)"
+                       x-text="machineSelectedOee?.quality_pct !== undefined ? machineSelectedOee.quality_pct + '%' : '—'">
                     </p>
                 </div>
 
@@ -385,7 +385,7 @@
 
                 {{-- Gauge cards (2/3 width) --}}
                 <div class="col-span-2 bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
-                    <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-5">OEE Components — <span x-text="oeeDate"></span></h3>
+                    <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-5">OEE Components — <span x-text="oeeDate"></span><span x-show="selectedShiftObj" x-text="' · ' + (selectedShiftObj?.name || '')"></span></h3>
                     <div class="grid grid-cols-4 gap-3">
 
                         {{-- OEE Gauge --}}
@@ -394,8 +394,8 @@
                                 <canvas id="detail-gauge-oee"></canvas>
                                 <div class="gauge-label pb-1">
                                     <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineFirstOee?.oee_pct)"
-                                         x-text="machineFirstOee?.oee_pct !== null && machineFirstOee?.oee_pct !== undefined ? machineFirstOee.oee_pct + '%' : '—'">
+                                         :class="gaugeTextClass(machineSelectedOee?.oee_pct)"
+                                         x-text="machineSelectedOee?.oee_pct !== null && machineSelectedOee?.oee_pct !== undefined ? machineSelectedOee.oee_pct + '%' : '—'">
                                     </div>
                                 </div>
                             </div>
@@ -408,8 +408,8 @@
                                 <canvas id="detail-gauge-avail"></canvas>
                                 <div class="gauge-label pb-1">
                                     <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineFirstOee?.availability_pct)"
-                                         x-text="machineFirstOee?.availability_pct !== undefined ? machineFirstOee.availability_pct + '%' : '—'">
+                                         :class="gaugeTextClass(machineSelectedOee?.availability_pct)"
+                                         x-text="machineSelectedOee?.availability_pct !== undefined ? machineSelectedOee.availability_pct + '%' : '—'">
                                     </div>
                                 </div>
                             </div>
@@ -422,8 +422,8 @@
                                 <canvas id="detail-gauge-perf"></canvas>
                                 <div class="gauge-label pb-1">
                                     <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineFirstOee?.performance_pct)"
-                                         x-text="machineFirstOee?.performance_pct !== null && machineFirstOee?.performance_pct !== undefined ? machineFirstOee.performance_pct + '%' : '—'">
+                                         :class="gaugeTextClass(machineSelectedOee?.performance_pct)"
+                                         x-text="machineSelectedOee?.performance_pct !== null && machineSelectedOee?.performance_pct !== undefined ? machineSelectedOee.performance_pct + '%' : '—'">
                                     </div>
                                 </div>
                             </div>
@@ -436,8 +436,8 @@
                                 <canvas id="detail-gauge-qual"></canvas>
                                 <div class="gauge-label pb-1">
                                     <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineFirstOee?.quality_pct)"
-                                         x-text="machineFirstOee?.quality_pct !== undefined ? machineFirstOee.quality_pct + '%' : '—'">
+                                         :class="gaugeTextClass(machineSelectedOee?.quality_pct)"
+                                         x-text="machineSelectedOee?.quality_pct !== undefined ? machineSelectedOee.quality_pct + '%' : '—'">
                                     </div>
                                 </div>
                             </div>
@@ -586,7 +586,12 @@
                         <svg class="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                         </svg>
-                        <p class="text-sm">No production data in the last <span x-text="chartHours"></span> hours.</p>
+                        <template x-if="selectedShiftId && chartDate">
+                            <p class="text-sm">No data for <span x-text="selectedShiftObj?.name || 'this shift'"></span> on <span x-text="chartDate"></span>.</p>
+                        </template>
+                        <template x-if="!(selectedShiftId && chartDate)">
+                            <p class="text-sm">No production data in the last <span x-text="chartHours"></span> hours.</p>
+                        </template>
                     </div>
                 </template>
             </div>
@@ -931,7 +936,7 @@ function iotDashboard(apiToken, factoryId, factories) {
         chartLoading: false,
         error:        null,
         lastRefresh:  null,
-        countdown:    5,
+        countdown:    30,
 
         oeeData:    [],
         oeeDate:    new Date().toISOString().split('T')[0],
@@ -941,6 +946,7 @@ function iotDashboard(apiToken, factoryId, factories) {
         timelineLoading: false,
 
         _refreshTimer:   null,
+        _oeeTimer:       null,
         _countdownTimer: null,
         _charts: {},
 
@@ -966,6 +972,16 @@ function iotDashboard(apiToken, factoryId, factories) {
         get machineFirstOee() {
             const shifts = this.machineOeeShifts;
             if (!shifts.length) return null;
+            return shifts.find(s => s.oee_pct !== null) || shifts[0];
+        },
+
+        // OEE for the currently selected shift (or best if All Day)
+        get machineSelectedOee() {
+            const shifts = this.machineOeeShifts;
+            if (!shifts.length) return null;
+            if (this.selectedShiftId) {
+                return shifts.find(s => s.shift_id == this.selectedShiftId) || shifts[0];
+            }
             return shifts.find(s => s.oee_pct !== null) || shifts[0];
         },
 
@@ -1038,7 +1054,10 @@ function iotDashboard(apiToken, factoryId, factories) {
             this.refresh();
             this.loadOee();
             this.loadShifts();
-            this._refreshTimer   = setInterval(() => this.refresh(), 5000);
+            // Status refreshes every 30s — machine on/off state changes slowly
+            this._refreshTimer   = setInterval(() => this.refresh(), 30000);
+            // OEE refreshes every 5 min — matches the aggregator schedule
+            this._oeeTimer       = setInterval(() => this.loadOee(), 300000);
             this._countdownTimer = setInterval(() => {
                 this.countdown = Math.max(0, this.countdown - 1);
             }, 1000);
@@ -1047,7 +1066,7 @@ function iotDashboard(apiToken, factoryId, factories) {
         // ── Data fetching ─────────────────────────────────────
 
         async refresh() {
-            this.countdown = 5;
+            this.countdown = 30;
             this.loading   = true;
             this.error     = null;
 
@@ -1056,6 +1075,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 const res    = await fetch(`/api/v1/iot/status${params}`, {
                     headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
                 });
+                if (res.status === 401) { window.location.href = '/login'; return; }
                 if (!res.ok) throw new Error(`Status ${res.status}`);
 
                 const json    = await res.json();
@@ -1304,7 +1324,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this._charts[k] = null;
             });
 
-            const s = this.machineFirstOee;
+            const s = this.machineSelectedOee;
 
             const specs = [
                 { id: 'detail-gauge-oee',   key: 'gaugeOee',   val: s?.oee_pct },

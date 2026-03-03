@@ -321,7 +321,7 @@ function dashboard({ factoryId, apiToken }) {
         },
 
         get onlineCount() {
-            return this.machines.filter(m => m.status === 'online').length;
+            return this.machines.filter(m => m.status === 'active').length;
         },
 
         async refresh() {
@@ -382,20 +382,18 @@ function dashboard({ factoryId, apiToken }) {
 
         machineCardClass(status) {
             const map = {
-                online:      'border-green-200 bg-green-50',
-                idle:        'border-yellow-200 bg-yellow-50',
-                offline:     'border-gray-200 bg-gray-50',
+                active:      'border-green-200 bg-green-50',
                 maintenance: 'border-orange-200 bg-orange-50',
+                retired:     'border-gray-200 bg-gray-50',
             };
             return map[status] ?? 'border-gray-200 bg-gray-50';
         },
 
         statusBadgeClass(status) {
             const map = {
-                online:      'bg-green-100 text-green-800',
-                idle:        'bg-yellow-100 text-yellow-800',
-                offline:     'bg-gray-100 text-gray-600',
+                active:      'bg-green-100 text-green-800',
                 maintenance: 'bg-orange-100 text-orange-800',
+                retired:     'bg-gray-100 text-gray-500',
             };
             return map[status] ?? 'bg-gray-100 text-gray-600';
         },

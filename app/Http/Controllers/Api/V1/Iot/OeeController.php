@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * OeeController
@@ -152,6 +153,12 @@ class OeeController extends Controller
             : Carbon::today();
         $useLive = (bool) $request->query('live', false);
 
+        // Cache for 5 minutes (matches aggregator schedule). Bypass with ?live=1.
+        $cacheKey = "factory_oee_{$factoryId}_{$date->format('Y-m-d')}";
+        if (!$useLive && Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
+
         $machines = Machine::where('factory_id', $factoryId)
             ->where('status', '!=', 'retired')
             ->orderBy('name')
@@ -215,11 +222,19 @@ class OeeController extends Controller
             ];
         });
 
-        return response()->json([
+        $payload = [
             'factory_id' => $factoryId,
             'date'       => $date->format('Y-m-d'),
             'machines'   => $result,
-        ]);
+        ];
+
+        // Cache for 5 minutes (only today's data — historical dates cached longer)
+        $ttl = $date->isToday() ? 300 : 3600;
+        if (!$useLive) {
+            Cache::put($cacheKey, $payload, $ttl);
+        }
+
+        return response()->json($payload);
     }
 
     // ── Private helpers ───────────────────────────────────────────────
@@ -257,7 +272,7 @@ class OeeController extends Controller
         $oee = $this->oeeService->calculateForShift(
             $machine, $shift, $date,
             $plan?->planned_qty,
-            $plan?->part?->cycle_time_std,
+            $plan?->part?->cycle_time_std !== null ? (float) $plan->part->cycle_time_std : null,
         );
 
         return array_merge($oee->toArray(), ['_source' => 'live']);
@@ -272,7 +287,7 @@ class OeeController extends Controller
         $oee = $this->oeeService->calculateForShift(
             $machine, $shift, $date,
             $plan?->planned_qty,
-            $plan?->part?->cycle_time_std,
+            $plan?->part?->cycle_time_std !== null ? (float) $plan->part->cycle_time_std : null,
         );
 
         return array_merge($oee->toArray(), ['_source' => 'live']);

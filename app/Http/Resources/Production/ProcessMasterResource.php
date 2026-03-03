@@ -25,6 +25,7 @@ class ProcessMasterResource extends JsonResource
                                           ? (float) $this->standard_time
                                           : null,
             'machine_type_default' => $this->machine_type_default,
+            'process_type'         => $this->process_type ?? 'inhouse',
             'description'          => $this->description,
             'is_active'            => (bool) $this->is_active,
 

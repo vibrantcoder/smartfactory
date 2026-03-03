@@ -4,10 +4,14 @@ use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\Dashboard\DashboardController;
 use App\Http\Controllers\Admin\Iot\IotDashboardController;
 use App\Http\Controllers\Admin\Part\PartRoutingController;
+use App\Http\Controllers\Admin\ProcessMaster\ProcessMasterController as AdminProcessMasterController;
 use App\Http\Controllers\Admin\Production\CustomerController as AdminCustomerController;
 use App\Http\Controllers\Admin\Production\ProductionPlanController as AdminProductionPlanController;
 use App\Http\Controllers\Admin\Role\RoleController;
 use App\Http\Controllers\Admin\User\UserController;
+use App\Http\Controllers\Employee\Auth\LoginController as EmployeeLoginController;
+use App\Http\Controllers\Employee\Dashboard\DashboardController as EmployeeDashboardController;
+use App\Http\Controllers\Employee\Production\JobsController as EmployeeJobsController;
 use App\Domain\Production\Models\Part;
 use Illuminate\Support\Facades\Route;
 
@@ -21,7 +25,7 @@ Route::post('/logout', [LoginController::class, 'logout'])
 Route::get('/', fn () => redirect()->route('admin.dashboard'));
 
 // Protected admin routes
-Route::middleware(['auth:web', 'factory.scope'])
+Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
@@ -64,9 +68,41 @@ Route::middleware(['auth:web', 'factory.scope'])
             Route::get('/plans', [AdminProductionPlanController::class, 'index'])->name('plans.index');
         });
 
+        // Process Masters
+        Route::prefix('process-masters')->name('process-masters.')->group(function () {
+            Route::get('/', [AdminProcessMasterController::class, 'index'])->name('index');
+        });
+
         // IoT Dashboard
         Route::prefix('iot')->name('iot.')->group(function () {
             Route::get('/', [IotDashboardController::class, 'index'])->name('index');
             Route::get('/machines/{machine}/export', [IotDashboardController::class, 'export'])->name('export');
         });
+
+        // Machine assignment for operators
+        Route::post('/users/{user}/assign-machine', [UserController::class, 'assignMachine'])->name('users.assign-machine');
     });
+
+// ── Employee Portal ────────────────────────────────────────────────────────
+Route::prefix('employee')->name('employee.')->group(function () {
+
+    // Public auth
+    Route::get('/login',  [EmployeeLoginController::class, 'showForm'])->name('login');
+    Route::post('/login', [EmployeeLoginController::class, 'login'])->name('do-login');
+    Route::post('/logout', [EmployeeLoginController::class, 'logout'])
+        ->middleware('auth:web')
+        ->name('logout');
+
+    // Protected employee routes
+    Route::middleware(['auth:web', 'factory.scope', 'employee.role'])->group(function () {
+
+        // No-machine info page (no machine check here)
+        Route::get('/no-machine', [EmployeeDashboardController::class, 'noMachine'])->name('no-machine');
+
+        // Routes that require a machine assignment
+        Route::middleware('employee.machine')->group(function () {
+            Route::get('/dashboard', [EmployeeDashboardController::class, 'index'])->name('dashboard');
+            Route::get('/jobs',      [EmployeeJobsController::class, 'index'])->name('jobs.index');
+        });
+    });
+});

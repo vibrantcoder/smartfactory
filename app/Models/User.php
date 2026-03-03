@@ -24,6 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'factory_id',
+        'machine_id',
         'is_active',
     ];
 
@@ -44,5 +45,10 @@ class User extends Authenticatable
     public function factory(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(\App\Domain\Factory\Models\Factory::class);
+    }
+
+    public function machine(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\App\Domain\Machine\Models\Machine::class);
     }
 }

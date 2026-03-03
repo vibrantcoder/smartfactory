@@ -15,11 +15,14 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'factory.scope'  => SetFactoryPermissionScope::class,
-            'factory.member' => EnsureFactoryMembership::class,
-            'role'           => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission'     => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-            'role_or_perm'   => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'factory.scope'    => SetFactoryPermissionScope::class,
+            'factory.member'   => EnsureFactoryMembership::class,
+            'role'             => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'       => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_perm'     => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'admin.role'       => \App\Http\Middleware\Admin\EnsureAdminRole::class,
+            'employee.role'    => \App\Http\Middleware\Employee\EnsureEmployeeRole::class,
+            'employee.machine' => \App\Http\Middleware\Employee\EnsureHasMachineAssigned::class,
         ]);
 
         $middleware->appendToGroup('api', [

@@ -65,7 +65,7 @@ class UserController extends Controller
         }
 
         $users = $query
-            ->select(['id', 'name', 'email', 'factory_id', 'is_active', 'created_at'])
+            ->select(['id', 'name', 'email', 'factory_id', 'machine_id', 'is_active', 'created_at'])
             ->orderBy('name')
             ->paginate(25);
 
@@ -79,6 +79,7 @@ class UserController extends Controller
                 'name'         => $user->name,
                 'email'        => $user->email,
                 'factory_id'   => $user->factory_id,
+                'machine_id'   => $user->machine_id,
                 'is_active'    => $user->is_active,
                 'role'         => $userRole?->name,
                 'role_label'   => $userRole ? RoleEnum::from($userRole->name)->label() : null,
@@ -225,6 +226,41 @@ class UserController extends Controller
             'message'    => "Role [{$roleEnum->label()}] assigned to {$user->name}.",
             'role'       => $roleEnum->value,
             'role_label' => $roleEnum->label(),
+        ]);
+    }
+
+    // ── assignMachine ─────────────────────────────────────────
+
+    /**
+     * POST /admin/users/{user}/assign-machine
+     *
+     * Assigns (or clears) a machine to an operator/viewer user.
+     * The machine must belong to the same factory as the user.
+     */
+    public function assignMachine(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('update', $user);
+        $this->abortIfCrossFactory($request->user(), $user);
+
+        $validated = $request->validate([
+            'machine_id' => 'nullable|integer|exists:machines,id',
+        ]);
+
+        if ($validated['machine_id'] !== null) {
+            $machine = \App\Domain\Machine\Models\Machine::withoutGlobalScopes()
+                ->find($validated['machine_id']);
+            if ($machine && $machine->factory_id !== $user->factory_id) {
+                return response()->json(['message' => 'Machine does not belong to this user\'s factory.'], 422);
+            }
+        }
+
+        $user->update(['machine_id' => $validated['machine_id']]);
+
+        return response()->json([
+            'message'    => $validated['machine_id']
+                ? "Machine assigned to {$user->name}."
+                : "Machine unassigned from {$user->name}.",
+            'machine_id' => $user->machine_id,
         ]);
     }
 

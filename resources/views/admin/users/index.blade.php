@@ -115,6 +115,12 @@
                                                 Assign Role
                                             </button>
                                         </template>
+                                        <template x-if="user.can_edit && (user.role === 'operator' || user.role === 'viewer')">
+                                            <button @click="openMachineModal(user)"
+                                                    class="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors">
+                                                <span x-text="user.machine_id ? 'Machine ✓' : 'Assign Machine'"></span>
+                                            </button>
+                                        </template>
                                         <template x-if="user.can_reassign && user.role">
                                             <button @click="revokeRole(user)"
                                                     class="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors">
@@ -325,6 +331,44 @@
         </div>
     </template>
 
+    {{-- ASSIGN MACHINE MODAL --}}
+    <template x-if="machineModal.open">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+             @click.self="machineModal.open = false">
+            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+                <h3 class="text-base font-semibold text-gray-900 mb-1">Assign Machine</h3>
+                <p class="text-sm text-gray-500 mb-4">
+                    Set the machine for <strong x-text="machineModal.user?.name"></strong>
+                </p>
+                <div class="mb-5">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Machine</label>
+                    <template x-if="machineModal.loadingMachines">
+                        <p class="text-sm text-gray-400 italic">Loading machines…</p>
+                    </template>
+                    <template x-if="!machineModal.loadingMachines">
+                        <select x-model="machineModal.selectedMachineId"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400">
+                            <option value="">— No machine assigned —</option>
+                            <template x-for="m in machineModal.machines" :key="m.id">
+                                <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
+                            </template>
+                        </select>
+                    </template>
+                </div>
+                <div class="flex items-center gap-3 justify-end">
+                    <button @click="machineModal.open = false"
+                            class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
+                    <button @click="submitMachineAssign()"
+                            :disabled="machineModal.saving || machineModal.loadingMachines"
+                            class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors">
+                        <span x-show="!machineModal.saving">Save</span>
+                        <span x-show="machineModal.saving">Saving…</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
 </div>{{-- end x-data --}}
 
 @endsection
@@ -351,6 +395,10 @@ function userManager(apiToken, isSuperAdmin, factories) {
         assignModal: {
             open: false, saving: false, user: null,
             assignableRoles: [], selectedRole: null,
+        },
+        machineModal: {
+            open: false, saving: false, user: null,
+            machines: [], loadingMachines: false, selectedMachineId: '',
         },
 
         init() { this.loadUsers(1); },
@@ -513,6 +561,51 @@ function userManager(apiToken, isSuperAdmin, factories) {
                 }
             } catch (e) {
                 this.setFlash('error', 'Network error. Please retry.');
+            }
+        },
+
+        async openMachineModal(user) {
+            this.machineModal = {
+                open: true, saving: false, user,
+                machines: [], loadingMachines: true,
+                selectedMachineId: user.machine_id ?? '',
+            };
+            try {
+                const factoryParam = user.factory_id ? `&factory_id=${user.factory_id}` : '';
+                const res  = await fetch(`/api/v1/machines?per_page=200&status=active${factoryParam}`, { headers: this.headers });
+                const data = await res.json();
+                this.machineModal.machines = data.data ?? [];
+            } catch (e) {
+                this.setFlash('error', 'Could not load machines.');
+                this.machineModal.open = false;
+            } finally {
+                this.machineModal.loadingMachines = false;
+            }
+        },
+
+        async submitMachineAssign() {
+            this.machineModal.saving = true;
+            try {
+                const body = { machine_id: this.machineModal.selectedMachineId || null };
+                const res  = await fetch(`/admin/users/${this.machineModal.user.id}/assign-machine`, {
+                    method:  'POST',
+                    headers: this.headers,
+                    body:    JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    this.setFlash('error', data.message ?? 'Failed to assign machine.');
+                } else {
+                    this.setFlash('success', data.message);
+                    this.machineModal.open = false;
+                    // Update user row in place
+                    const idx = this.users.findIndex(u => u.id === this.machineModal.user.id);
+                    if (idx !== -1) this.users[idx].machine_id = data.machine_id;
+                }
+            } catch (e) {
+                this.setFlash('error', 'Network error. Please retry.');
+            } finally {
+                this.machineModal.saving = false;
             }
         },
 

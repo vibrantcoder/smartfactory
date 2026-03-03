@@ -337,8 +337,8 @@
                 </tr>
             </template>
 
-            {{-- One <tr> per machine --}}
-            <template x-for="machine in machines" :key="machine.id">
+            {{-- One <tr> per machine (paginated) --}}
+            <template x-for="machine in visibleMachines" :key="machine.id">
                 <tr class="group border-b border-gray-100">
 
                     {{-- Machine label (sticky left) --}}
@@ -357,31 +357,43 @@
                                 {{-- One slot per shift --}}
                                 <template x-for="slot in getSlots(machine.id, day.date)" :key="slot.shiftId">
                                     <div>
-                                        {{-- ── Plan card ── --}}
-                                        <template x-if="slot.plan">
-                                            <button
-                                                @click="openPlan(slot.plan)"
-                                                :class="['plan-card w-full text-left rounded-xl border-2 px-2.5 pt-2 pb-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400', planCardClass(slot.plan.status)]"
-                                            >
-                                                {{-- Status line --}}
-                                                <div class="flex items-center gap-1.5 mb-1.5">
-                                                    <span :class="['status-dot', statusDotColor(slot.plan.status)]"></span>
-                                                    <span class="text-[9px] font-bold uppercase tracking-widest opacity-70"
-                                                          x-text="slot.plan.status.replace('_',' ')"></span>
-                                                </div>
-                                                {{-- Part number --}}
-                                                <p class="text-xs font-bold truncate leading-tight"
-                                                   x-text="slot.plan.part?.part_number || '—'"></p>
-                                                {{-- Qty + shift name --}}
-                                                <p class="text-[10px] mt-1 opacity-60 truncate">
-                                                    <span x-text="Number(slot.plan.planned_qty).toLocaleString()"></span> pcs
-                                                    &middot; <span x-text="slot.shiftName"></span>
-                                                </p>
-                                            </button>
+
+                                        {{-- ── Has plans: show all cards + compact add button ── --}}
+                                        <template x-if="slot.plans.length > 0">
+                                            <div class="space-y-1">
+                                                <template x-for="plan in slot.plans" :key="plan.id">
+                                                    <button
+                                                        @click="openPlan(plan)"
+                                                        :class="['plan-card w-full text-left rounded-xl border-2 px-2.5 pt-2 pb-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400', planCardClass(plan.status)]"
+                                                    >
+                                                        <div class="flex items-center gap-1.5 mb-1.5">
+                                                            <span :class="['status-dot', statusDotColor(plan.status)]"></span>
+                                                            <span class="text-[9px] font-bold uppercase tracking-widest opacity-70"
+                                                                  x-text="plan.status.replace('_',' ')"></span>
+                                                        </div>
+                                                        <p class="text-xs font-bold truncate leading-tight"
+                                                           x-text="plan.part?.part_number || '—'"></p>
+                                                        <p class="text-[10px] mt-1 opacity-60 truncate">
+                                                            <span x-text="Number(plan.planned_qty).toLocaleString()"></span> pcs
+                                                            &middot; <span x-text="slot.shiftName"></span>
+                                                        </p>
+                                                    </button>
+                                                </template>
+                                                {{-- Compact "add another part" button --}}
+                                                <button
+                                                    @click="openCreate(machine.id, day.date, slot.shiftId)"
+                                                    class="w-full rounded-lg border border-dashed border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-300 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/60 transition-all flex items-center gap-1"
+                                                >
+                                                    <svg class="h-2.5 w-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                                                    </svg>
+                                                    Add part
+                                                </button>
+                                            </div>
                                         </template>
 
-                                        {{-- ── Empty slot (add button) ── --}}
-                                        <template x-if="!slot.plan">
+                                        {{-- ── Empty slot: big dashed add button ── --}}
+                                        <template x-if="slot.plans.length === 0">
                                             <button
                                                 @click="openCreate(machine.id, day.date, slot.shiftId)"
                                                 class="w-full rounded-xl border border-dashed border-gray-200 px-2 py-2 text-[11px] font-medium text-gray-300 hover:border-indigo-300 hover:text-indigo-400 hover:bg-indigo-50/70 transition-all text-left flex items-center gap-1.5"
@@ -392,6 +404,7 @@
                                                 <span x-text="slot.shiftName"></span>
                                             </button>
                                         </template>
+
                                     </div>
                                 </template>
 
@@ -405,6 +418,17 @@
     </table>
 </div>
 
+{{-- Load more machines --}}
+<template x-if="machinePageSize < machines.length">
+    <div class="mt-4 text-center">
+        <button @click="machinePageSize += 15"
+                class="px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors">
+            Show more machines
+            (<span x-text="machines.length - machinePageSize"></span> remaining)
+        </button>
+    </div>
+</template>
+
 </div>{{-- end x-data --}}
 @endsection
 
@@ -415,9 +439,10 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         apiToken,
         currentFactoryId: factoryId,
         factories:  factories || [],
-        machines:   machines  || [],
-        shifts:     shifts    || [],
-        parts:      parts     || [],
+        machines:       machines  || [],
+        shifts:         shifts    || [],
+        parts:          parts     || [],
+        machinePageSize: 15,
 
         plans:   [],
         loading: false,
@@ -488,14 +513,20 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             return `${f.monthLabel} ${f.dayNum} – ${l.monthLabel} ${l.dayNum}, ${y}`;
         },
 
-        // Fast O(1) lookup: "machineId:date:shiftId" → plan object
+        get visibleMachines() {
+            return this.machines.slice(0, this.machinePageSize);
+        },
+
+        // O(1) lookup: "machineId:date:shiftId" → array of plans
         // planned_date from Laravel API is ISO datetime ("2026-03-02T00:00:00.000000Z")
         // but weekDays uses "YYYY-MM-DD" — normalize to date-only for matching.
         get plansMap() {
             const m = {};
             for (const p of this.plans) {
-                const d = p.planned_date ? String(p.planned_date).substring(0, 10) : '';
-                m[`${p.machine_id}:${d}:${p.shift_id}`] = p;
+                const d   = p.planned_date ? String(p.planned_date).substring(0, 10) : '';
+                const key = `${p.machine_id}:${d}:${p.shift_id}`;
+                if (!m[key]) m[key] = [];
+                m[key].push(p);
             }
             return m;
         },
@@ -588,16 +619,12 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
 
         // ── Calendar helpers ────────────────────────────────
 
-        getPlan(machineId, date, shiftId) {
-            return this.plansMap[`${machineId}:${date}:${shiftId}`] || null;
-        },
-
-        // Returns array of { shiftId, shiftName, plan|null } for one cell
+        // Returns array of { shiftId, shiftName, plans[] } for one cell
         getSlots(machineId, date) {
             return this.shifts.map(s => ({
                 shiftId:   s.id,
                 shiftName: s.name,
-                plan:      this.getPlan(machineId, date, s.id),
+                plans:     this.plansMap[`${machineId}:${date}:${s.id}`] || [],
             }));
         },
 

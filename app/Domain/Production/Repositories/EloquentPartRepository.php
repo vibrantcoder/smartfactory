@@ -138,6 +138,8 @@ class EloquentPartRepository implements PartRepositoryInterface
                     'sequence_order'        => $index + 1,
                     'machine_type_required' => $step['machine_type_required'] ?? null,
                     'standard_cycle_time'   => $step['standard_cycle_time']   ?? null,
+                    'setup_time'            => $step['setup_time']            ?? null,
+                    'process_type'          => $step['process_type']          ?? 'inhouse',
                     'notes'                 => $step['notes']                 ?? null,
                 ]);
             }

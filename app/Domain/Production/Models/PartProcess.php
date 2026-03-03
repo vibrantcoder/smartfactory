@@ -25,6 +25,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int         $sequence_order            1-based; UNIQUE per part
  * @property string|null $machine_type_required     restricts eligible machines
  * @property float|null  $standard_cycle_time       overrides process_master.standard_time
+ * @property float|null  $setup_time                setup/changeover time in minutes
+ * @property string      $process_type              'inhouse' or 'outside'
  * @property string|null $notes
  */
 class PartProcess extends BaseModel
@@ -37,6 +39,8 @@ class PartProcess extends BaseModel
         'sequence_order',
         'machine_type_required',
         'standard_cycle_time',
+        'setup_time',
+        'process_type',
         'notes',
     ];
 
@@ -46,6 +50,7 @@ class PartProcess extends BaseModel
             ...parent::casts(),
             'sequence_order'      => 'integer',
             'standard_cycle_time' => 'decimal:2',
+            'setup_time'          => 'decimal:2',
         ];
     }
 

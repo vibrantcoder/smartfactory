@@ -49,7 +49,7 @@
 <div
     x-data="iotDashboard('{{ $apiToken }}', {{ $factoryId ?? 'null' }}, {{ $factories->toJson() }})"
     x-init="init()"
-    class="h-full flex flex-col gap-4"
+    class="flex flex-col gap-6"
 >
 
     {{-- ════════════════════════════════════════════════════════
@@ -708,7 +708,7 @@
     <div x-show="error" x-cloak class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" x-text="error"></div>
 
     {{-- ── Machine grid ──────────────────────────────────────── --}}
-    <div class="flex-1 overflow-y-auto">
+    <div>
         <div x-show="loading && machines.length === 0" class="flex items-center justify-center h-40">
             <div class="text-gray-400 text-sm">Loading machines...</div>
         </div>

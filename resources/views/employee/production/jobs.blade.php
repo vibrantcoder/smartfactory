@@ -2,6 +2,10 @@
 @section('title', 'My Jobs')
 
 @section('content')
+<div
+    x-data="jobsActuals('{{ $apiToken }}')"
+    x-init="init()"
+>
 
 <div class="mb-5 flex items-center justify-between">
     <div>
@@ -120,6 +124,21 @@
             </div>
         </div>
         @endif
+
+        {{-- Record Output button (in_progress / scheduled only) --}}
+        @if(in_array($plan->status, ['in_progress', 'scheduled']))
+        <div class="mt-3 flex items-center justify-between">
+            <button @click="openRecord({{ $plan->id }}, {{ $plan->planned_qty }}, '{{ $plan->part?->name }}')"
+                    class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Record Output
+            </button>
+            <span x-show="lastSaved == {{ $plan->id }}"
+                  class="text-xs text-green-600 font-medium">Saved!</span>
+        </div>
+        @endif
     </div>
 </div>
 @empty
@@ -139,4 +158,123 @@
 <div class="mt-5">{{ $plans->links() }}</div>
 @endif
 
+{{-- ── Record Output Modal ─────────────────────────────────────── --}}
+<div x-show="showModal" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div @click.stop class="w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div>
+                <h3 class="font-semibold text-gray-900 text-sm">Record Output</h3>
+                <p class="text-xs text-gray-400 mt-0.5" x-text="modalPart"></p>
+            </div>
+            <button @click="showModal = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="px-5 py-4 space-y-4">
+            <div x-show="saveError" class="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" x-text="saveError"></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Good Parts <span class="text-red-500">*</span></label>
+                    <input type="number" x-model.number="form.actual_qty" min="0" :max="modalPlanned * 2"
+                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <p class="text-xs text-gray-400 mt-0.5">Target: <span x-text="modalPlanned"></span></p>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Defects / Rejects</label>
+                    <input type="number" x-model.number="form.defect_qty" min="0"
+                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                <textarea x-model="form.notes" rows="2" placeholder="Optional notes…"
+                          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
+            </div>
+        </div>
+        <div class="flex gap-3 border-t border-gray-100 px-5 py-4">
+            <button @click="showModal = false"
+                    class="flex-1 rounded-lg border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50">
+                Cancel
+            </button>
+            <button @click="saveRecord()" :disabled="saving"
+                    class="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                <span x-text="saving ? 'Saving…' : 'Save Output'"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+</div>{{-- end x-data --}}
+
 @endsection
+
+@push('scripts')
+<script>
+function jobsActuals(apiToken) {
+    return {
+        apiToken,
+        showModal:   false,
+        saving:      false,
+        saveError:   null,
+        lastSaved:   null,
+        modalPlanId: null,
+        modalPlanned: 0,
+        modalPart:   '',
+        form: { actual_qty: 0, defect_qty: 0, notes: '' },
+
+        init() {},
+
+        openRecord(planId, planned, partName) {
+            this.modalPlanId  = planId;
+            this.modalPlanned = planned;
+            this.modalPart    = partName;
+            this.saveError    = null;
+            this.form = { actual_qty: 0, defect_qty: 0, notes: '' };
+            this.showModal = true;
+        },
+
+        async saveRecord() {
+            if (!this.form.actual_qty && this.form.actual_qty !== 0) {
+                this.saveError = 'Please enter good parts count.';
+                return;
+            }
+            this.saving    = true;
+            this.saveError = null;
+            try {
+                const res = await fetch('/api/v1/production-actuals', {
+                    method:  'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.apiToken}`,
+                        'Content-Type':  'application/json',
+                        'Accept':        'application/json',
+                    },
+                    body: JSON.stringify({
+                        production_plan_id: this.modalPlanId,
+                        actual_qty:         parseInt(this.form.actual_qty) || 0,
+                        defect_qty:         parseInt(this.form.defect_qty) || 0,
+                        notes:              this.form.notes || null,
+                        recorded_at:        new Date().toISOString().slice(0,19).replace('T',' '),
+                    }),
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    this.saveError = err.message || JSON.stringify(err.errors || err);
+                    this.saving = false;
+                    return;
+                }
+                this.lastSaved = this.modalPlanId;
+                this.showModal = false;
+                // Reload to show updated totals
+                setTimeout(() => window.location.reload(), 600);
+            } catch(e) {
+                this.saveError = e.message;
+            }
+            this.saving = false;
+        },
+    };
+}
+</script>
+@endpush

@@ -287,24 +287,30 @@ class IotController extends Controller
 
         $rows = (clone $baseQuery)
             ->selectRaw("
-                DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')    AS hour,
-                COALESCE(SUM(part_count),  0)                  AS parts_sum,
-                COALESCE(SUM(part_reject), 0)                  AS rejects_sum,
-                SUM(CASE WHEN alarm_code > 0 THEN 1 ELSE 0 END) AS alarm_events,
-                COUNT(*)                                        AS samples
+                DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')                                    AS hour,
+                COALESCE(SUM(part_count),  0)                                                   AS parts_sum,
+                COALESCE(SUM(part_reject), 0)                                                   AS rejects_sum,
+                SUM(CASE WHEN alarm_code > 0                     THEN 1 ELSE 0 END)            AS alarm_events,
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 1 THEN 1 ELSE 0 END)            AS run_ticks_hr,
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS idle_ticks_hr,
+                COUNT(*)                                                                         AS samples
             ")
             ->groupByRaw("DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')")
             ->orderBy('hour')
             ->get();
 
         // Time-state breakdown for the whole period
+        // State logic (matches binary IoT pulse data):
+        //   RUN   = cycle_state=1, alarm_code=0  → machine actively producing
+        //   IDLE  = cycle_state=0, alarm_code=0  → stopped but no fault (includes standby)
+        //   ALARM = alarm_code>0                 → fault active
         $ts = (clone $baseQuery)
             ->selectRaw("
-                COUNT(*)                                                                                     AS total_samples,
-                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 1                            THEN 1 ELSE 0 END) AS run_ticks,
-                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0 AND auto_mode = 1          THEN 1 ELSE 0 END) AS idle_ticks,
-                SUM(CASE WHEN alarm_code > 0                                                 THEN 1 ELSE 0 END) AS alarm_ticks,
-                TIMESTAMPDIFF(SECOND, MIN(logged_at), MAX(logged_at))                                          AS span_seconds
+                COUNT(*)                                                                         AS total_samples,
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 1 THEN 1 ELSE 0 END)            AS run_ticks,
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS idle_ticks,
+                SUM(CASE WHEN alarm_code > 0                     THEN 1 ELSE 0 END)            AS alarm_ticks,
+                TIMESTAMPDIFF(SECOND, MIN(logged_at), MAX(logged_at))                          AS span_seconds
             ")
             ->first();
 
@@ -320,9 +326,43 @@ class IotController extends Controller
         $rejectsPerHour = $rows->pluck('rejects_sum')->map(fn($v) => (int) $v)->all();
         $alarmsPerHour  = $rows->pluck('alarm_events')->map(fn($v) => (int) $v)->all();
 
+        // Per-hour spindle state percentages (for Industry 4.0 Spindle Utilization chart)
+        $spindleUtilPerHour = $rows->map(fn($r) =>
+            (int) $r->samples > 0 ? round(((int)$r->run_ticks_hr  / (int)$r->samples) * 100, 1) : 0.0
+        )->all();
+        $idlePctPerHour     = $rows->map(fn($r) =>
+            (int) $r->samples > 0 ? round(((int)$r->idle_ticks_hr / (int)$r->samples) * 100, 1) : 0.0
+        )->all();
+        $alarmPctPerHour    = $rows->map(fn($r) =>
+            (int) $r->samples > 0 ? round(((int)$r->alarm_events  / (int)$r->samples) * 100, 1) : 0.0
+        )->all();
+
         $totalParts   = (int) $rows->sum('parts_sum');
         $totalRejects = (int) $rows->sum('rejects_sum');
         $totalAlarms  = (int) $rows->sum('alarm_events');
+
+        // Pre-compute seconds for Availability and Parts/Run Hr
+        $runSec    = (int) round($runTicks   * $intervalSec);
+        $idleSec   = (int) round($idleTicks  * $intervalSec);
+        $alarmSec  = (int) round($alarmTicks * $intervalSec);
+        $uptimeSec = $runSec + $idleSec;               // non-fault time
+        $totalIotSec = $uptimeSec + $alarmSec;          // total observed time
+
+        // Availability = (Run + Idle) / Total × 100  (mirrors old software formula)
+        $availabilityPct = $totalIotSec > 0
+            ? round($uptimeSec / $totalIotSec * 100, 1)
+            : 0.0;
+
+        // Spindle Utilization = Run / Total × 100  (actual cutting time ÷ observed time)
+        // Stricter than Availability — shows what fraction of time spindle was actually ON
+        $spindleUtilPct = $totalIotSec > 0
+            ? round($runSec / $totalIotSec * 100, 1)
+            : 0.0;
+
+        // Parts produced per hour of actual running time
+        $partsPerRunHour = $runSec > 0
+            ? round($totalParts / ($runSec / 3600), 1)
+            : null;
 
         return response()->json([
             'machine' => [
@@ -332,10 +372,13 @@ class IotController extends Controller
                 'type' => $machine->type,
             ],
             'period_hours'       => $hours,
-            'labels'             => $labels,
-            'parts_per_hour'     => $partsPerHour,
-            'rejects_per_hour'   => $rejectsPerHour,
-            'alarms_per_hour'    => $alarmsPerHour,
+            'labels'                 => $labels,
+            'parts_per_hour'         => $partsPerHour,
+            'rejects_per_hour'       => $rejectsPerHour,
+            'alarms_per_hour'        => $alarmsPerHour,
+            'spindle_util_per_hour'  => $spindleUtilPerHour,
+            'idle_pct_per_hour'      => $idlePctPerHour,
+            'alarm_pct_per_hour'     => $alarmPctPerHour,
             'summary' => [
                 'total_parts'   => $totalParts,
                 'total_rejects' => $totalRejects,
@@ -350,9 +393,15 @@ class IotController extends Controller
                 'run_ticks'            => $runTicks,
                 'idle_ticks'           => $idleTicks,
                 'alarm_ticks'          => $alarmTicks,
-                'run_seconds'          => (int) round($runTicks   * $intervalSec),
-                'idle_seconds'         => (int) round($idleTicks  * $intervalSec),
-                'alarm_seconds'        => (int) round($alarmTicks * $intervalSec),
+                'run_seconds'          => $runSec,
+                'idle_seconds'         => $idleSec,
+                'alarm_seconds'        => $alarmSec,
+                // Availability = (run+idle) / total × 100  — same formula as old software
+                'availability_pct'     => $availabilityPct,
+                // Spindle Utilization = run / total × 100  — actual cutting time fraction
+                'spindle_util_pct'     => $spindleUtilPct,
+                // Rate of production during machine-running time only
+                'parts_per_run_hour'   => $partsPerRunHour,
             ],
         ]);
     }
@@ -526,6 +575,7 @@ class IotController extends Controller
         $shiftId = $request->query('shift_id');
         $date    = $request->query('date');
 
+        // Priority 1: shift + date → exact shift window
         if ($shiftId && $date) {
             $shift = Shift::find((int) $shiftId);
             if ($shift) {
@@ -540,6 +590,15 @@ class IotController extends Controller
             }
         }
 
+        // Priority 2: date only (All Day) → full calendar day 00:00–24:00
+        // This ensures All Day = sum of all shifts on that date (no rolling window mismatch)
+        if ($date) {
+            $since = Carbon::parse($date)->startOfDay();
+            $until  = $since->copy()->addDay();
+            return [$since, $until, 24];
+        }
+
+        // Fallback: rolling hours window (legacy)
         $hours = (int) $request->query('hours', 24);
         $hours = max(1, min(168, $hours));
         $since = now()->subHours($hours);

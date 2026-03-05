@@ -59,10 +59,11 @@ class MachineController extends Controller
             // HasFactoryScope global scope automatically applies:
             // WHERE factory_id = auth()->user()->factory_id
             ->with(['factory:id,name'])
+            ->when($request->filled('search'), fn($q) => $q->search($request->input('search')))
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->when($request->filled('type'),   fn($q) => $q->where('type', $request->type))
             ->orderBy('name')
-            ->paginate(25);
+            ->paginate($request->integer('per_page', 25));
 
         return MachineResource::collection($machines);
     }

@@ -113,7 +113,7 @@
             <input
                 type="date"
                 x-model="chartDate"
-                @change="oeeDate = chartDate; loadOee(); loadChart(selectedMachine.id)"
+                @change="oeeDate = chartDate; loadOee(selectedMachine?.factory_id || currentFactoryId || null); loadChart(selectedMachine.id)"
                 class="rounded-lg bg-slate-800 border border-slate-600 text-slate-200 text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
 
@@ -204,26 +204,11 @@
         </div>
 
         {{-- ── Time Analysis Strip ──────────────────────────── --}}
+        {{-- State logic: RUN=cycle_state=1,no_alarm | IDLE=stopped,no_alarm | ALARM=alarm_code>0 --}}
         <div class="shrink-0 border-b border-slate-700/60 px-6 py-3 bg-slate-900/70">
-            <div class="grid grid-cols-4 gap-3">
+            <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0.75rem;">
 
-                {{-- Up Time --}}
-                <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
-                    <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/15">
-                        <svg class="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
-                        </svg>
-                    </div>
-                    <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Up Time</p>
-                        <p class="text-xl font-bold tabular-nums leading-none text-emerald-400"
-                           x-text="machineTimeStats ? machineTimeStats.uptime : '—'"></p>
-                        <p class="text-xs text-slate-600 mt-0.5"
-                           x-text="machineTimeStats ? machineTimeStats.uptimeLabel : 'hr : min'"></p>
-                    </div>
-                </div>
-
-                {{-- Run Time --}}
+                {{-- Run Time: cycle_state=1, alarm_code=0 --}}
                 <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
                     <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/15">
                         <svg class="h-5 w-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -232,7 +217,7 @@
                         </svg>
                     </div>
                     <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Run Hrs</p>
+                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Run Time</p>
                         <p class="text-xl font-bold tabular-nums leading-none text-green-400"
                            x-text="machineTimeStats ? machineTimeStats.run : '—'"></p>
                         <p class="text-xs text-slate-600 mt-0.5"
@@ -240,7 +225,7 @@
                     </div>
                 </div>
 
-                {{-- Idle Time --}}
+                {{-- Idle Time: cycle_state=0, alarm_code=0 (any auto_mode) --}}
                 <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
                     <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-500/15">
                         <svg class="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -248,7 +233,7 @@
                         </svg>
                     </div>
                     <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Idle Hrs</p>
+                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Idle Time</p>
                         <p class="text-xl font-bold tabular-nums leading-none text-yellow-400"
                            x-text="machineTimeStats ? machineTimeStats.idle : '—'"></p>
                         <p class="text-xs text-slate-600 mt-0.5"
@@ -256,7 +241,7 @@
                     </div>
                 </div>
 
-                {{-- Alarm Time --}}
+                {{-- Alarm Time: alarm_code > 0 --}}
                 <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
                     <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/15">
                         <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -264,11 +249,59 @@
                         </svg>
                     </div>
                     <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Alarm Hrs</p>
+                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Alarm Time</p>
                         <p class="text-xl font-bold tabular-nums leading-none text-red-400"
                            x-text="machineTimeStats ? machineTimeStats.alarm : '—'"></p>
                         <p class="text-xs text-slate-600 mt-0.5"
                            x-text="machineTimeStats ? machineTimeStats.alarmLabel : 'hr : min'"></p>
+                    </div>
+                </div>
+
+                {{-- Availability: (Run+Idle) / Total × 100 --}}
+                <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
+                    <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/15">
+                        <svg class="h-5 w-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Availability</p>
+                        <p class="text-xl font-bold tabular-nums leading-none"
+                           :class="(machineTimeStats?.availPct ?? 0) >= 85 ? 'text-emerald-400' : (machineTimeStats?.availPct ?? 0) >= 60 ? 'text-yellow-400' : 'text-red-400'"
+                           x-text="machineTimeStats?.availPct !== null && machineTimeStats?.availPct !== undefined ? machineTimeStats.availPct + '%' : '—'"></p>
+                        <p class="text-xs text-slate-600 mt-0.5">Run+Idle ÷ Total</p>
+                    </div>
+                </div>
+
+                {{-- Spindle Utilization: Run / Total × 100 (actual cutting time fraction) --}}
+                <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
+                    <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15">
+                        <svg class="h-5 w-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Spindle Util</p>
+                        <p class="text-xl font-bold tabular-nums leading-none"
+                           :class="(machineTimeStats?.spindleUtilPct ?? 0) >= 70 ? 'text-violet-400' : (machineTimeStats?.spindleUtilPct ?? 0) >= 45 ? 'text-yellow-400' : 'text-red-400'"
+                           x-text="machineTimeStats?.spindleUtilPct !== null && machineTimeStats?.spindleUtilPct !== undefined ? machineTimeStats.spindleUtilPct + '%' : '—'"></p>
+                        <p class="text-xs text-slate-600 mt-0.5">Run ÷ Total</p>
+                    </div>
+                </div>
+
+                {{-- Parts / Run Hr: parts produced per hour of actual running time --}}
+                <div class="flex items-center gap-3 rounded-xl bg-slate-800/60 border border-slate-700/40 px-4 py-3">
+                    <div class="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/15">
+                        <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Parts/Run Hr</p>
+                        <p class="text-xl font-bold tabular-nums leading-none text-blue-400"
+                           x-text="machineTimeStats?.partsPerRunHr !== null && machineTimeStats?.partsPerRunHr !== undefined ? machineTimeStats.partsPerRunHr : '—'"></p>
+                        <p class="text-xs text-slate-600 mt-0.5">Rate while running</p>
                     </div>
                 </div>
 
@@ -586,13 +619,43 @@
                         <svg class="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                         </svg>
-                        <template x-if="selectedShiftId && chartDate">
+                        <template x-if="selectedShiftId">
                             <p class="text-sm">No data for <span x-text="selectedShiftObj?.name || 'this shift'"></span> on <span x-text="chartDate"></span>.</p>
                         </template>
-                        <template x-if="!(selectedShiftId && chartDate)">
-                            <p class="text-sm">No production data in the last <span x-text="chartHours"></span> hours.</p>
+                        <template x-if="!selectedShiftId">
+                            <p class="text-sm">No production data for <span x-text="chartDate"></span> (All Day).</p>
                         </template>
                     </div>
+                </template>
+            </div>
+
+            {{-- Row 2b: Spindle Utilization / Hour — Industry 4.0 key chart --}}
+            <div class="bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Spindle Utilization / Hour</h3>
+                        <span class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-xs font-medium text-violet-400">Industry 4.0</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-[11px]">
+                        <span class="flex items-center gap-1.5 text-green-400">
+                            <span class="h-2.5 w-4 rounded inline-block bg-green-500/80"></span>Spindle ON
+                        </span>
+                        <span class="flex items-center gap-1.5 text-yellow-400">
+                            <span class="h-2.5 w-4 rounded inline-block bg-yellow-400/75"></span>Idle
+                        </span>
+                        <span class="flex items-center gap-1.5 text-red-400">
+                            <span class="h-2.5 w-4 rounded inline-block bg-red-500/80"></span>Alarm
+                        </span>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-600 mb-4">Each bar = 1 hour. Shows how much of each hour the spindle was cutting vs idle vs in alarm.</p>
+                <template x-if="chartData && chartData.labels.length > 0">
+                    <div style="height: 200px; position: relative;">
+                        <canvas id="detail-spindle"></canvas>
+                    </div>
+                </template>
+                <template x-if="!chartLoading && chartData && chartData.labels.length === 0">
+                    <div class="flex items-center justify-center h-32 text-slate-600 text-sm">No data for this period</div>
                 </template>
             </div>
 
@@ -911,6 +974,59 @@
         </template>
     </div>{{-- end OEE section --}}
 
+    {{-- ══════════════════════════════════════════════════════════
+         OEE TREND — Historical Line Chart
+    ══════════════════════════════════════════════════════════ --}}
+    <div class="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
+            <div class="flex items-center gap-3">
+                <h2 class="font-semibold text-gray-900 text-sm">OEE Trend</h2>
+                <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Historical</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <select x-model="trendDays" @change="loadTrend()"
+                        class="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                    <option value="7">Last 7 days</option>
+                    <option value="14">Last 14 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                </select>
+                <span class="text-xs text-gray-400" x-show="trendLoading">Loading…</span>
+            </div>
+        </div>
+
+        <div class="p-5">
+            <template x-if="trendData.length > 0">
+                <div style="height: 240px; position: relative;">
+                    <canvas id="trend-chart"></canvas>
+                </div>
+            </template>
+            <template x-if="!trendLoading && trendData.length === 0">
+                <div class="flex items-center justify-center h-40 text-gray-400 text-sm">
+                    No historical OEE data yet. Run <code class="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">php artisan iot:aggregate-oee</code> to populate.
+                </div>
+            </template>
+
+            {{-- Legend --}}
+            <template x-if="trendData.length > 0">
+                <div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span class="flex items-center gap-1.5">
+                        <span class="inline-block h-2.5 w-5 rounded bg-indigo-500"></span>OEE%
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="inline-block h-2.5 w-5 rounded bg-green-500"></span>Availability%
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="inline-block h-2.5 w-5 rounded bg-amber-500"></span>Performance%
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="inline-block h-2.5 w-5 rounded bg-blue-400"></span>Quality%
+                    </span>
+                </div>
+            </template>
+        </div>
+    </div>{{-- end Trend section --}}
+
 </div>{{-- end x-data --}}
 @endsection
 
@@ -941,6 +1057,11 @@ function iotDashboard(apiToken, factoryId, factories) {
         oeeData:    [],
         oeeDate:    new Date().toISOString().split('T')[0],
         oeeLoading: false,
+
+        trendData:    [],
+        trendDays:    30,
+        trendLoading: false,
+        _trendChart:  null,
 
         timelineData:    null,
         timelineLoading: false,
@@ -1014,15 +1135,22 @@ function iotDashboard(apiToken, factoryId, factories) {
             const idleSec  = ts.idle_seconds  || 0;
             const alarmSec = ts.alarm_seconds || 0;
             const upSec    = runSec + idleSec;
+            const totalSec = upSec + alarmSec;
             return {
-                run:        this.fmtHHMM(runSec),
-                runLabel:   this.fmtHrMin(runSec),
-                idle:       this.fmtHHMM(idleSec),
-                idleLabel:  this.fmtHrMin(idleSec),
-                alarm:      this.fmtHHMM(alarmSec),
-                alarmLabel: this.fmtHrMin(alarmSec),
-                uptime:     this.fmtHHMM(upSec),
-                uptimeLabel: this.fmtHrMin(upSec),
+                run:           this.fmtHHMM(runSec),
+                runLabel:      this.fmtHrMin(runSec),
+                idle:          this.fmtHHMM(idleSec),
+                idleLabel:     this.fmtHrMin(idleSec),
+                alarm:         this.fmtHHMM(alarmSec),
+                alarmLabel:    this.fmtHrMin(alarmSec),
+                uptime:        this.fmtHHMM(upSec),
+                uptimeLabel:   this.fmtHrMin(upSec),
+                // IoT-based Availability = (run+idle) / total × 100
+                availPct:      ts.availability_pct ?? null,
+                // Spindle Utilization = run / total × 100 (actual cutting time fraction)
+                spindleUtilPct: ts.spindle_util_pct ?? (totalSec > 0 ? Math.round(runSec / totalSec * 1000) / 10 : null),
+                // Parts produced per hour of actual running time
+                partsPerRunHr: ts.parts_per_run_hour ?? null,
             };
         },
 
@@ -1054,6 +1182,7 @@ function iotDashboard(apiToken, factoryId, factories) {
             this.refresh();
             this.loadOee();
             this.loadShifts();
+            this.loadTrend();
             // Status refreshes every 30s — machine on/off state changes slowly
             this._refreshTimer   = setInterval(() => this.refresh(), 30000);
             // OEE refreshes every 5 min — matches the aggregator schedule
@@ -1094,8 +1223,8 @@ function iotDashboard(apiToken, factoryId, factories) {
             }
         },
 
-        async loadOee() {
-            const fid = this.currentFactoryId || factoryId;
+        async loadOee(overrideFactoryId = null) {
+            const fid = overrideFactoryId ?? this.currentFactoryId ?? factoryId;
             if (!fid) return;
 
             this.oeeLoading = true;
@@ -1116,6 +1245,55 @@ function iotDashboard(apiToken, factoryId, factories) {
             } catch { /* silent */ } finally {
                 this.oeeLoading = false;
             }
+        },
+
+        async loadTrend() {
+            const fid = this.currentFactoryId;
+            if (!fid) return;
+            this.trendLoading = true;
+            try {
+                const params = new URLSearchParams({ factory_id: fid, days: this.trendDays });
+                const res = await fetch(`/api/v1/iot/oee/trend?${params}`, {
+                    headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
+                });
+                if (!res.ok) return;
+                const json    = await res.json();
+                this.trendData = json.trend || [];
+                await this.$nextTick();
+                this.renderTrendChart();
+            } catch { /* silent */ } finally {
+                this.trendLoading = false;
+            }
+        },
+
+        renderTrendChart() {
+            const canvas = document.getElementById('trend-chart');
+            if (!canvas || !this.trendData.length) return;
+            if (this._trendChart) { this._trendChart.destroy(); this._trendChart = null; }
+            const labels = this.trendData.map(r => {
+                const d = new Date(r.oee_date);
+                return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            });
+            this._trendChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'OEE%',          data: this.trendData.map(r => r.avg_oee),          borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)', tension: 0.3, pointRadius: 3, fill: true },
+                        { label: 'Availability%', data: this.trendData.map(r => r.avg_availability), borderColor: '#22c55e', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+                        { label: 'Performance%',  data: this.trendData.map(r => r.avg_performance),  borderColor: '#f59e0b', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+                        { label: 'Quality%',      data: this.trendData.map(r => r.avg_quality),      borderColor: '#60a5fa', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+                    ],
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                    scales: {
+                        y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+                        x: { ticks: { font: { size: 11 }, maxRotation: 0 }, grid: { display: false } },
+                    },
+                },
+            });
         },
 
         async loadShifts(factoryId) {
@@ -1141,7 +1319,10 @@ function iotDashboard(apiToken, factoryId, factories) {
                 if (this.selectedShiftId && this.chartDate) {
                     url = `/api/v1/iot/machines/${machineId}/chart?shift_id=${this.selectedShiftId}&date=${this.chartDate}`;
                 } else {
-                    url = `/api/v1/iot/machines/${machineId}/chart?hours=24`;
+                    // All Day: always pass the selected date so the window is
+                    // the full calendar day (00:00–24:00), not a rolling 24h window.
+                    // This ensures All Day totals = Morning + Afternoon combined.
+                    url = `/api/v1/iot/machines/${machineId}/chart?date=${this.chartDate}`;
                 }
                 const res = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
@@ -1169,7 +1350,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 if (this.selectedShiftId && this.chartDate) {
                     url = `/api/v1/iot/machines/${machineId}/timeline?shift_id=${this.selectedShiftId}&date=${this.chartDate}`;
                 } else {
-                    url = `/api/v1/iot/machines/${machineId}/timeline?hours=24`;
+                    url = `/api/v1/iot/machines/${machineId}/timeline?date=${this.chartDate}`;
                 }
                 const res = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
@@ -1188,8 +1369,13 @@ function iotDashboard(apiToken, factoryId, factories) {
             this.selectedShiftId = '';
             this.chartDate       = this.oeeDate; // sync with OEE date picker
             this.detailOpen      = true;
-            // Load shifts for this machine's factory (may differ from global selector)
-            await this.loadShifts(machine.factory_id || this.currentFactoryId);
+            // Resolve factory: machine's factory > global selector > PHP-injected
+            const machineFid = machine.factory_id || this.currentFactoryId || factoryId;
+            // Load shifts + OEE in parallel — OEE must be ready before renderGauges()
+            await Promise.all([
+                this.loadShifts(machineFid),
+                this.loadOee(machineFid),
+            ]);
             await this.loadChart(machine.id);
         },
 
@@ -1215,6 +1401,7 @@ function iotDashboard(apiToken, factoryId, factories) {
             this.destroyCharts();
             this.refresh();
             this.loadOee();
+            this.loadTrend();
             this.loadShifts(this.currentFactoryId);
         },
 
@@ -1235,7 +1422,7 @@ function iotDashboard(apiToken, factoryId, factories) {
         // ── Chart rendering ───────────────────────────────────
 
         renderCharts() {
-            ['parts', 'rejects', 'alarms'].forEach(k => {
+            ['parts', 'rejects', 'alarms', 'spindle'].forEach(k => {
                 this._charts[k]?.destroy();
                 this._charts[k] = null;
             });
@@ -1314,6 +1501,69 @@ function iotDashboard(apiToken, factoryId, factories) {
                         }],
                     },
                     options: darkOpts,
+                });
+            }
+
+            // ── Spindle Utilization / Hour — stacked 100% bar ────────
+            const spindleCtx = document.getElementById('detail-spindle');
+            if (spindleCtx && this.chartData.spindle_util_per_hour) {
+                const spindleOpts = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: { maxTicksLimit: 8, maxRotation: 0, font: { size: 10 }, color: '#94a3b8' },
+                            grid:  { color: 'rgba(255,255,255,0.05)' },
+                        },
+                        y: {
+                            stacked: true,
+                            min: 0, max: 100,
+                            ticks: { callback: v => v + '%', font: { size: 10 }, color: '#94a3b8', stepSize: 25 },
+                            grid:  { color: 'rgba(255,255,255,0.06)' },
+                        },
+                    },
+                };
+                this._charts.spindle = new Chart(spindleCtx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Spindle ON',
+                                data: this.chartData.spindle_util_per_hour,
+                                backgroundColor: 'rgba(34,197,94,0.82)',
+                                stack: 'state',
+                                borderRadius: { topLeft: 3, topRight: 3 },
+                                borderSkipped: false,
+                            },
+                            {
+                                label: 'Idle',
+                                data: this.chartData.idle_pct_per_hour,
+                                backgroundColor: 'rgba(234,179,8,0.70)',
+                                stack: 'state',
+                                borderSkipped: false,
+                            },
+                            {
+                                label: 'Alarm',
+                                data: this.chartData.alarm_pct_per_hour,
+                                backgroundColor: 'rgba(239,68,68,0.80)',
+                                stack: 'state',
+                                borderSkipped: false,
+                            },
+                        ],
+                    },
+                    options: spindleOpts,
                 });
             }
         },

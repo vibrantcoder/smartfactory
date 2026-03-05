@@ -27,8 +27,9 @@ class ProductionPlanController extends Controller
             ->get(['id', 'name', 'start_time', 'end_time', 'duration_min']);
 
         $parts = Part::where('status', 'active')
+            ->with(['processes' => fn ($q) => $q->orderBy('sequence_order')->with('processMaster:id,name,standard_time')])
             ->orderBy('part_number')
-            ->get(['id', 'name', 'part_number', 'cycle_time_std']);
+            ->get(['id', 'name', 'part_number', 'cycle_time_std', 'total_cycle_time']);
 
         $factories = $user->factory_id === null
             ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])

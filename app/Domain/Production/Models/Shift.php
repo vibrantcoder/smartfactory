@@ -36,6 +36,10 @@ class Shift extends BaseModel
         'start_time',
         'end_time',
         'duration_min',
+        'break_start',
+        'break_end',
+        'break_min',
+        'crosses_midnight',
         'is_active',
     ];
 
@@ -43,9 +47,20 @@ class Shift extends BaseModel
     {
         return [
             ...parent::casts(),
-            'is_active'    => 'boolean',
-            'duration_min' => 'integer',
+            'is_active'        => 'boolean',
+            'crosses_midnight'  => 'boolean',
+            'duration_min'     => 'integer',
+            'break_min'        => 'integer',
         ];
+    }
+
+    /**
+     * OEE planned operating minutes = shift duration minus scheduled breaks.
+     * Availability = (planned_min - alarm_min) / planned_min
+     */
+    public function getPlannedMinAttribute(): int
+    {
+        return max(0, $this->duration_min - ($this->break_min ?? 0));
     }
 
     // ── Relationships ─────────────────────────────────────────

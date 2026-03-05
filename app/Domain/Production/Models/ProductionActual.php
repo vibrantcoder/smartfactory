@@ -32,9 +32,12 @@ class ProductionActual extends BaseModel
      */
     protected $fillable = [
         'production_plan_id',
+        'factory_id',
+        'machine_id',
         'actual_qty',
         'defect_qty',
         'recorded_at',
+        'recorded_by',
         'notes',
     ];
 

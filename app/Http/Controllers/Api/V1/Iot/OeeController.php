@@ -237,6 +237,57 @@ class OeeController extends Controller
         return response()->json($payload);
     }
 
+    // ── oeeTrend ──────────────────────────────────────────────────────
+
+    /**
+     * GET /api/v1/iot/oee/trend
+     *
+     * Returns daily average OEE for the last N days (default 30).
+     * Reads exclusively from machine_oee_shifts summary table — fast.
+     *
+     * Query params:
+     *   days       = int  (default 30, max 90)
+     *   factory_id = int  (super-admin only)
+     *
+     * Response shape:
+     *   { days: [ { date, avg_oee, avg_availability, avg_performance, avg_quality, machine_count } ] }
+     */
+    public function oeeTrend(Request $request): JsonResponse
+    {
+        $user      = $request->user();
+        $factoryId = $user->factory_id ?? $request->integer('factory_id');
+
+        if (!$factoryId) {
+            return response()->json(['message' => 'factory_id is required for super-admin.'], 422);
+        }
+
+        $days  = min(90, max(7, $request->integer('days', 30)));
+        $start = Carbon::today()->subDays($days - 1);
+
+        $rows = MachineOeeShift::where('factory_id', $factoryId)
+            ->where('oee_date', '>=', $start->toDateString())
+            ->where('oee_date', '<=', Carbon::today()->toDateString())
+            ->selectRaw('
+                oee_date,
+                ROUND(AVG(availability_pct), 1)  as avg_availability,
+                ROUND(AVG(performance_pct), 1)   as avg_performance,
+                ROUND(AVG(quality_pct), 1)        as avg_quality,
+                ROUND(AVG(oee_pct), 1)            as avg_oee,
+                COUNT(DISTINCT machine_id)        as machine_count,
+                SUM(total_parts)                  as total_parts,
+                SUM(good_parts)                   as good_parts
+            ')
+            ->groupBy('oee_date')
+            ->orderBy('oee_date')
+            ->get();
+
+        return response()->json([
+            'factory_id' => $factoryId,
+            'days'       => $days,
+            'trend'      => $rows,
+        ]);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────
 
     /**
@@ -288,6 +339,7 @@ class OeeController extends Controller
             $machine, $shift, $date,
             $plan?->planned_qty,
             $plan?->part?->cycle_time_std !== null ? (float) $plan->part->cycle_time_std : null,
+            $plan?->id,
         );
 
         return array_merge($oee->toArray(), ['_source' => 'live']);

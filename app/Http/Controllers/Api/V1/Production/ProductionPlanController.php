@@ -13,7 +13,10 @@ class ProductionPlanController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = ProductionPlan::query()->with(['machine', 'part', 'shift']);
+        $query = ProductionPlan::query()
+            ->with(['machine', 'part', 'shift', 'partProcess.processMaster'])
+            ->withSum('actuals as actual_qty_sum', 'actual_qty')
+            ->withSum('actuals as good_qty_sum', 'good_qty');
 
         if ($request->filled('from_date')) {
             $query->whereDate('planned_date', '>=', $request->input('from_date'));
@@ -27,6 +30,12 @@ class ProductionPlanController extends Controller
         if ($request->filled('factory_id')) {
             $query->where('factory_id', $request->integer('factory_id'));
         }
+        if ($request->filled('part_id')) {
+            $query->where('part_id', $request->integer('part_id'));
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
 
         $plans = $query
             ->orderBy('planned_date')
@@ -39,13 +48,14 @@ class ProductionPlanController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'machine_id'   => 'required|exists:machines,id',
-            'part_id'      => 'required|exists:parts,id',
-            'shift_id'     => 'required|exists:shifts,id',
-            'planned_date' => 'required|date',
-            'planned_qty'  => 'required|integer|min:1',
-            'factory_id'   => 'sometimes|exists:factories,id',
-            'notes'        => 'nullable|string',
+            'machine_id'      => 'required|exists:machines,id',
+            'part_id'         => 'required|exists:parts,id',
+            'part_process_id' => 'nullable|exists:part_processes,id',
+            'shift_id'        => 'required|exists:shifts,id',
+            'planned_date'    => 'required|date',
+            'planned_qty'     => 'required|integer|min:1',
+            'factory_id'      => 'sometimes|exists:factories,id',
+            'notes'           => 'nullable|string',
         ]);
 
         $data['factory_id'] = $request->user()->factory_id
@@ -53,26 +63,30 @@ class ProductionPlanController extends Controller
 
         $plan = ProductionPlan::create($data);
 
-        return response()->json($plan->load(['machine', 'part', 'shift']), 201);
+        return response()->json($plan->load(['machine', 'part', 'shift', 'partProcess.processMaster']), 201);
     }
 
     public function show(ProductionPlan $productionPlan): JsonResponse
     {
-        return response()->json($productionPlan->load(['machine', 'part', 'shift', 'actuals']));
+        return response()->json($productionPlan->load(['machine', 'part', 'shift', 'partProcess.processMaster', 'actuals']));
     }
 
     public function update(Request $request, ProductionPlan $productionPlan): JsonResponse
     {
         $data = $request->validate([
-            'planned_date' => 'sometimes|date',
-            'planned_qty'  => 'sometimes|integer|min:1',
-            'status'       => 'sometimes|in:draft,scheduled,in_progress,completed,cancelled',
-            'notes'        => 'nullable|string',
+            'machine_id'      => 'sometimes|exists:machines,id',
+            'part_id'         => 'sometimes|exists:parts,id',
+            'part_process_id' => 'nullable|exists:part_processes,id',
+            'shift_id'        => 'sometimes|exists:shifts,id',
+            'planned_date'    => 'sometimes|date',
+            'planned_qty'     => 'sometimes|integer|min:1',
+            'status'          => 'sometimes|in:draft,scheduled,in_progress,completed,cancelled',
+            'notes'           => 'nullable|string',
         ]);
 
         $productionPlan->update($data);
 
-        return response()->json($productionPlan->fresh(['machine', 'part', 'shift']));
+        return response()->json($productionPlan->fresh(['machine', 'part', 'shift', 'partProcess.processMaster']));
     }
 
     public function destroy(ProductionPlan $productionPlan): JsonResponse

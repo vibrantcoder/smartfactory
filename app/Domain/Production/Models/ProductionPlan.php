@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int         $factory_id
  * @property int         $machine_id
  * @property int         $part_id
+ * @property int|null    $part_process_id    which routing step this plan covers
  * @property int         $shift_id
  * @property string      $planned_date       DATE
  * @property int         $planned_qty
@@ -46,6 +47,7 @@ class ProductionPlan extends BaseModel
         'factory_id',
         'machine_id',
         'part_id',
+        'part_process_id',
         'shift_id',
         'planned_date',
         'planned_qty',
@@ -73,6 +75,11 @@ class ProductionPlan extends BaseModel
     public function part(): BelongsTo
     {
         return $this->belongsTo(Part::class, 'part_id');
+    }
+
+    public function partProcess(): BelongsTo
+    {
+        return $this->belongsTo(PartProcess::class, 'part_process_id');
     }
 
     public function shift(): BelongsTo

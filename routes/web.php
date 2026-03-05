@@ -3,10 +3,14 @@
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\Dashboard\DashboardController;
 use App\Http\Controllers\Admin\Iot\IotDashboardController;
+use App\Http\Controllers\Admin\Downtime\DowntimeController as AdminDowntimeController;
+use App\Http\Controllers\Admin\Employee\EmployeeController as AdminEmployeeController;
+use App\Http\Controllers\Admin\Machine\MachineController as AdminMachineController;
 use App\Http\Controllers\Admin\Part\PartRoutingController;
 use App\Http\Controllers\Admin\ProcessMaster\ProcessMasterController as AdminProcessMasterController;
 use App\Http\Controllers\Admin\Production\CustomerController as AdminCustomerController;
 use App\Http\Controllers\Admin\Production\ProductionPlanController as AdminProductionPlanController;
+use App\Http\Controllers\Admin\Production\ShiftController as AdminShiftController;
 use App\Http\Controllers\Admin\Role\RoleController;
 use App\Http\Controllers\Admin\User\UserController;
 use App\Http\Controllers\Employee\Auth\LoginController as EmployeeLoginController;
@@ -46,14 +50,21 @@ Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
         // Roles
         Route::prefix('roles')->name('roles.')->group(function () {
             Route::get('/',              [RoleController::class, 'index'])->name('index');
+            Route::post('/',             [RoleController::class, 'store'])->name('store');
             Route::get('/{role}',        [RoleController::class, 'show'])->name('show');
             Route::get('/{role}/matrix', [RoleController::class, 'matrix'])->name('matrix');
             Route::post('/{role}/permissions', [RoleController::class, 'syncPermissions'])->name('permissions');
+            Route::delete('/{role}',     [RoleController::class, 'destroy'])->name('destroy');
         });
 
         // Customers
         Route::prefix('customers')->name('customers.')->group(function () {
             Route::get('/', [AdminCustomerController::class, 'index'])->name('index');
+        });
+
+        // Machines
+        Route::prefix('machines')->name('machines.')->group(function () {
+            Route::get('/', [AdminMachineController::class, 'index'])->name('index');
         });
 
         // Parts
@@ -68,9 +79,22 @@ Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
             Route::get('/plans', [AdminProductionPlanController::class, 'index'])->name('plans.index');
         });
 
+        // Shifts
+        Route::prefix('shifts')->name('shifts.')->group(function () {
+            Route::get('/',           [AdminShiftController::class, 'index'])->name('index');
+            Route::post('/',          [AdminShiftController::class, 'store'])->name('store');
+            Route::put('/{shift}',    [AdminShiftController::class, 'update'])->name('update');
+            Route::delete('/{shift}', [AdminShiftController::class, 'destroy'])->name('destroy');
+        });
+
         // Process Masters
         Route::prefix('process-masters')->name('process-masters.')->group(function () {
             Route::get('/', [AdminProcessMasterController::class, 'index'])->name('index');
+        });
+
+        // Downtime Management
+        Route::prefix('downtimes')->name('downtimes.')->group(function () {
+            Route::get('/', [AdminDowntimeController::class, 'index'])->name('index');
         });
 
         // IoT Dashboard
@@ -78,6 +102,15 @@ Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
             Route::get('/', [IotDashboardController::class, 'index'])->name('index');
             Route::get('/machines/{machine}/export', [IotDashboardController::class, 'export'])->name('export');
         });
+
+        // Employee Permissions
+        Route::prefix('employees')->name('employees.')->group(function () {
+            Route::get('/', [AdminEmployeeController::class, 'index'])->name('index');
+        });
+
+        // User permission management (used by employee permission page)
+        Route::get('/users/{user}/permissions',        [UserController::class, 'permissions'])->name('users.permissions');
+        Route::post('/users/{user}/sync-permissions',  [UserController::class, 'syncPermissions'])->name('users.sync-permissions');
 
         // Machine assignment for operators
         Route::post('/users/{user}/assign-machine', [UserController::class, 'assignMachine'])->name('users.assign-machine');

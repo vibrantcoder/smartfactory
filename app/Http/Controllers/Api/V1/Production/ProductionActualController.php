@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1\Production;
 
 use App\Http\Controllers\Controller;
 use App\Domain\Production\Models\ProductionActual;
+use App\Domain\Production\Models\ProductionPlan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -26,18 +27,22 @@ class ProductionActualController extends Controller
     {
         $data = $request->validate([
             'production_plan_id' => 'required|exists:production_plans,id',
-            'machine_id'         => 'required|exists:machines,id',
             'actual_qty'         => 'required|integer|min:0',
             'defect_qty'         => 'required|integer|min:0',
-            'recorded_at'        => 'required|date',
+            'recorded_at'        => 'nullable|date',
             'notes'              => 'nullable|string',
         ]);
 
-        $data['factory_id'] = $request->user()->factory_id;
+        // Auto-derive machine_id, factory_id from the plan
+        $plan = ProductionPlan::findOrFail($data['production_plan_id']);
+        $data['machine_id']  = $plan->machine_id;
+        $data['factory_id']  = $plan->factory_id ?? $request->user()->factory_id;
+        $data['recorded_by'] = $request->user()->name ?? $request->user()->email;
+        $data['recorded_at'] = $data['recorded_at'] ?? now();
 
         $actual = ProductionActual::create($data);
 
-        return response()->json($actual, 201);
+        return response()->json($actual->fresh(), 201);
     }
 
     public function show(ProductionActual $productionActual): JsonResponse

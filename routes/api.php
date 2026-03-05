@@ -85,6 +85,7 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
 
             // OEE from IoT pulse data (part_count / part_reject signals)
             Route::get('oee',                    [\App\Http\Controllers\Api\V1\Iot\OeeController::class, 'factoryOee'])->name('oee.factory');
+            Route::get('oee/trend',              [\App\Http\Controllers\Api\V1\Iot\OeeController::class, 'oeeTrend'])->name('oee.trend');
             Route::get('machines/{machine}/oee', [\App\Http\Controllers\Api\V1\Iot\OeeController::class, 'machineOee'])->name('machine.oee');
         });
     });

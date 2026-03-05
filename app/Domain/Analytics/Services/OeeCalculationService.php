@@ -8,6 +8,7 @@ use App\Domain\Analytics\DataTransferObjects\OeeResult;
 use App\Domain\Factory\Models\FactorySettings;
 use App\Domain\Machine\Models\IotLog;
 use App\Domain\Machine\Models\Machine;
+use App\Domain\Production\Models\ProductionActual;
 use App\Domain\Production\Models\ProductionPlan;
 use App\Domain\Production\Models\Shift;
 use Carbon\Carbon;
@@ -51,6 +52,7 @@ class OeeCalculationService
         Carbon  $date,
         ?int    $plannedQty          = null,
         ?float  $cycleTimeStdSeconds = null,
+        ?int    $planId              = null,   // pass to use production_actuals for Quality
     ): OeeResult {
         // ── Time window ──────────────────────────────────────────────
         [$windowStart, $windowEnd] = $this->shiftWindow($shift, $date);
@@ -77,8 +79,23 @@ class OeeCalculationService
         $rejectParts  = (int) ($stats->total_rejects ?? 0);
         $goodParts    = max(0, $totalParts - $rejectParts);
 
+        // ── Override Quality with manually recorded production_actuals ────
+        // Manual entries (entered by operator) are more accurate than IoT pulses.
+        // Use them when at least one actual record exists for this plan.
+        if ($planId !== null) {
+            $actuals = ProductionActual::where('production_plan_id', $planId)
+                ->selectRaw('COALESCE(SUM(actual_qty), 0) as total_actual, COALESCE(SUM(good_qty), 0) as total_good')
+                ->first();
+            if ($actuals && (int) $actuals->total_actual > 0) {
+                $totalParts  = (int) $actuals->total_actual;
+                $goodParts   = (int) $actuals->total_good;
+                $rejectParts = max(0, $totalParts - $goodParts);
+            }
+        }
+
         // ── Availability ─────────────────────────────────────────────
-        $plannedMinutes = $shift->duration_min;
+        // planned_min = duration_min − break_min  (break is not productive time)
+        $plannedMinutes = $shift->planned_min;   // accessor on Shift model
         // Each alarm record represents one log interval of downtime
         $alarmMinutes   = (int) ceil($alarmRecords * $logIntervalSec / 60);
         $alarmMinutes   = min($alarmMinutes, $plannedMinutes);
@@ -162,6 +179,7 @@ class OeeCalculationService
                     $date,
                     $plan?->planned_qty,
                     $plan?->part?->cycle_time_std !== null ? (float) $plan->part->cycle_time_std : null,
+                    $plan?->id,
                 ),
             ];
         });

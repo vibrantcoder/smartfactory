@@ -145,6 +145,11 @@
                                                   hover:bg-blue-100 transition-colors">
                                             Routing
                                         </a>
+                                        <button @click="openSchedule(p)"
+                                                class="rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700
+                                                       hover:bg-violet-100 transition-colors">
+                                            Schedule
+                                        </button>
                                         <button @click="confirmDiscontinue(p)"
                                                 x-show="p.status === 'active'"
                                                 class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600
@@ -421,6 +426,193 @@
             </div>
         </div>
 
+    {{-- ════════════════════════════════════════════════════════
+         SCHEDULE MODAL — Part Production Schedule
+    ════════════════════════════════════════════════════════ --}}
+    <div x-show="showSchedule" style="display:none"
+         class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+         @click.self="showSchedule = false">
+        <div class="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col"
+             style="max-height: calc(100vh - 2rem)" @click.stop>
+
+            {{-- Header --}}
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4 flex-shrink-0">
+                <div>
+                    <h3 class="text-base font-semibold text-gray-900">
+                        Production Schedule —
+                        <span class="font-mono text-indigo-600" x-text="schedulePart?.part_number"></span>
+                    </h3>
+                    <p class="text-xs text-gray-400 mt-0.5" x-text="schedulePart?.name"></p>
+                </div>
+                <button @click="showSchedule = false"
+                        class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            {{-- Date range controls --}}
+            <div class="flex items-center gap-3 px-6 py-3 bg-gray-50 border-b border-gray-100 flex-shrink-0">
+                <label class="text-xs font-medium text-gray-600">From</label>
+                <input type="date" x-model="scheduleFrom" @change="reloadSchedule()"
+                       class="rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm
+                              focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                <label class="text-xs font-medium text-gray-600">To</label>
+                <input type="date" x-model="scheduleTo" @change="reloadSchedule()"
+                       class="rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm
+                              focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                <button @click="resetScheduleRange()"
+                        class="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                    Reset to 60 days
+                </button>
+            </div>
+
+            {{-- Content --}}
+            <div class="flex-1 overflow-y-auto min-h-0 px-6 py-4">
+
+                {{-- Loading --}}
+                <template x-if="scheduleLoading">
+                    <div class="flex items-center justify-center py-16 text-gray-400 text-sm gap-2">
+                        <svg class="animate-spin h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                        </svg>
+                        Loading schedule…
+                    </div>
+                </template>
+
+                {{-- Empty --}}
+                <template x-if="!scheduleLoading && schedulePlans.length === 0">
+                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                        <svg class="h-12 w-12 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="mt-3 text-sm font-medium text-gray-500">No plans found</p>
+                        <p class="mt-1 text-xs text-gray-400">No production plans scheduled for this part in the selected range.</p>
+                    </div>
+                </template>
+
+                {{-- Schedule grouped by date --}}
+                <template x-if="!scheduleLoading && schedulePlans.length > 0">
+                    <div class="space-y-4">
+
+                        {{-- Summary bar --}}
+                        <div class="flex flex-wrap gap-3">
+                            <div class="flex items-center gap-2 rounded-lg bg-violet-50 border border-violet-100 px-4 py-2">
+                                <span class="text-xs text-violet-600 font-medium">Total Planned</span>
+                                <span class="text-lg font-bold text-violet-700"
+                                      x-text="schedulePlans.reduce((s, p) => s + (p.planned_qty || 0), 0).toLocaleString()"></span>
+                                <span class="text-xs text-violet-500" x-text="schedulePart?.unit || 'pcs'"></span>
+                            </div>
+                            <div class="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-4 py-2">
+                                <span class="text-xs text-blue-600 font-medium">Plans</span>
+                                <span class="text-lg font-bold text-blue-700" x-text="schedulePlans.length"></span>
+                            </div>
+                            <div class="flex items-center gap-2 rounded-lg bg-green-50 border border-green-100 px-4 py-2">
+                                <span class="text-xs text-green-600 font-medium">Days</span>
+                                <span class="text-lg font-bold text-green-700" x-text="schedulePlansByDate.length"></span>
+                            </div>
+                        </div>
+
+                        {{-- Per-date blocks --}}
+                        <template x-for="group in schedulePlansByDate" :key="group.date">
+                            <div class="rounded-xl border border-gray-100 overflow-hidden">
+
+                                {{-- Date header --}}
+                                <div class="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-slate-700 to-slate-600">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        <span class="text-sm font-semibold text-white"
+                                              x-text="new Date(group.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' })"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-slate-300">Total:</span>
+                                        <span class="text-sm font-bold text-white"
+                                              x-text="group.total.toLocaleString() + ' ' + (schedulePart?.unit || 'pcs')"></span>
+                                    </div>
+                                </div>
+
+                                {{-- Plans table for this date --}}
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 border-b border-gray-100">
+                                        <tr class="text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                                            <th class="px-4 py-2">Machine</th>
+                                            <th class="px-4 py-2">Process Step</th>
+                                            <th class="px-4 py-2">Shift</th>
+                                            <th class="px-4 py-2 text-right">Planned Qty</th>
+                                            <th class="px-4 py-2 text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-50">
+                                        <template x-for="plan in group.plans" :key="plan.id">
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="px-4 py-2.5">
+                                                    <p class="font-medium text-gray-800 text-xs" x-text="plan.machine?.name || '—'"></p>
+                                                    <p class="text-[10px] text-gray-400 font-mono" x-text="plan.machine?.code || ''"></p>
+                                                </td>
+                                                <td class="px-4 py-2.5">
+                                                    <template x-if="plan.part_process?.process_master">
+                                                        <div>
+                                                            <p class="text-xs font-medium text-indigo-700"
+                                                               x-text="plan.part_process.process_master.name"></p>
+                                                            <p class="text-[10px] text-gray-400"
+                                                               x-text="plan.part_process.process_master.code || ''"></p>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!plan.part_process?.process_master">
+                                                        <span class="text-xs text-gray-400">—</span>
+                                                    </template>
+                                                </td>
+                                                <td class="px-4 py-2.5 text-xs text-gray-600" x-text="plan.shift?.name || '—'"></td>
+                                                <td class="px-4 py-2.5 text-right">
+                                                    <span class="font-semibold text-gray-900"
+                                                          x-text="(plan.planned_qty || 0).toLocaleString()"></span>
+                                                    <span class="text-[10px] text-gray-400 ml-0.5"
+                                                          x-text="schedulePart?.unit || 'pcs'"></span>
+                                                </td>
+                                                <td class="px-4 py-2.5 text-center">
+                                                    <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                                                          :class="{
+                                                              'bg-gray-100 text-gray-500':   plan.status === 'draft',
+                                                              'bg-blue-100 text-blue-700':   plan.status === 'scheduled',
+                                                              'bg-amber-100 text-amber-700': plan.status === 'in_progress',
+                                                              'bg-green-100 text-green-700': plan.status === 'completed',
+                                                              'bg-red-100 text-red-600':     plan.status === 'cancelled',
+                                                          }"
+                                                          x-text="plan.status?.replace('_', ' ')"></span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                    {{-- Daily total footer row --}}
+                                    <tfoot>
+                                        <tr class="bg-violet-50 border-t border-violet-100">
+                                            <td colspan="3" class="px-4 py-2 text-xs font-semibold text-violet-600">
+                                                Day Total
+                                            </td>
+                                            <td class="px-4 py-2 text-right text-sm font-bold text-violet-700"
+                                                x-text="group.total.toLocaleString() + ' ' + (schedulePart?.unit || 'pcs')"></td>
+                                            <td class="px-4 py-2"></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            {{-- Footer --}}
+            <div class="flex justify-end border-t border-gray-100 px-6 py-4 flex-shrink-0">
+                <button @click="showSchedule = false"
+                        class="rounded-lg px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 @endsection
@@ -448,8 +640,14 @@ function partsPage(apiToken, factoryId, factories) {
         showCreate:        false,
         showEdit:          false,
         showDiscontinue:   false,
+        showSchedule:      false,
         editTarget:        null,
         discontinueTarget: null,
+        schedulePart:      null,
+        schedulePlans:     [],
+        scheduleLoading:   false,
+        scheduleFrom:      '',
+        scheduleTo:        '',
         form:              {},
         saving:            false,
         formError:         null,
@@ -618,6 +816,62 @@ function partsPage(apiToken, factoryId, factories) {
             } finally {
                 this.saving = false;
             }
+        },
+
+        // ── Schedule
+        async openSchedule(p) {
+            this.schedulePart    = p;
+            this.schedulePlans   = [];
+            this.scheduleLoading = true;
+            this.showSchedule    = true;
+
+            const today  = new Date().toISOString().substring(0, 10);
+            const future = new Date(Date.now() + 60 * 86400000).toISOString().substring(0, 10);
+            this.scheduleFrom = today;
+            this.scheduleTo   = future;
+
+            await this._fetchSchedule(p.id, today, future);
+        },
+
+        async reloadSchedule() {
+            if (!this.schedulePart || !this.scheduleFrom || !this.scheduleTo) return;
+            this.scheduleLoading = true;
+            await this._fetchSchedule(this.schedulePart.id, this.scheduleFrom, this.scheduleTo);
+        },
+
+        resetScheduleRange() {
+            const today  = new Date().toISOString().substring(0, 10);
+            const future = new Date(Date.now() + 60 * 86400000).toISOString().substring(0, 10);
+            this.scheduleFrom = today;
+            this.scheduleTo   = future;
+            this.reloadSchedule();
+        },
+
+        async _fetchSchedule(partId, from, to) {
+            const params = new URLSearchParams({ part_id: partId, from_date: from, to_date: to, per_page: 500 });
+            try {
+                const res  = await fetch(`/api/v1/production-plans?${params}`, { headers: this.headers });
+                const data = await res.json();
+                if (res.ok) this.schedulePlans = data.data ?? data;
+                else this.schedulePlans = [];
+            } catch {
+                this.schedulePlans = [];
+            } finally {
+                this.scheduleLoading = false;
+            }
+        },
+
+        get schedulePlansByDate() {
+            const byDate = {};
+            for (const plan of this.schedulePlans) {
+                const date = plan.planned_date ? String(plan.planned_date).substring(0, 10) : 'Unknown';
+                if (!byDate[date]) byDate[date] = { total: 0, plans: [] };
+                byDate[date].plans.push(plan);
+                byDate[date].total += plan.planned_qty || 0;
+            }
+            return Object.entries(byDate)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([date, data]) => ({ date, ...data }));
         },
 
         // ── Helpers

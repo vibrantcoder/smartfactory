@@ -5,14 +5,16 @@
 @section('content')
 
 @php
-    $isSuperAdmin = $factoryId === null;
-    $factoriesJson = $factories->isNotEmpty() ? $factories->toJson() : '[]';
+    $isSuperAdmin    = $factoryId === null;
+    $factoriesJson   = $factories->isNotEmpty() ? $factories->toJson() : '[]';
+    $permGroupsJson  = json_encode($permissionGroups ?? []);
 @endphp
 
 <div x-data="userManager(
     {{ $apiToken ? json_encode($apiToken) : 'null' }},
     {{ $isSuperAdmin ? 'true' : 'false' }},
-    {{ $factoriesJson }}
+    {{ $factoriesJson }},
+    {{ $permGroupsJson }}
 )" x-init="init()">
 
     {{-- Flash --}}
@@ -109,16 +111,16 @@
                                                 Edit
                                             </button>
                                         </template>
-                                        <template x-if="user.can_reassign">
-                                            <button @click="openAssign(user)"
-                                                    class="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors">
-                                                Assign Role
-                                            </button>
-                                        </template>
-                                        <template x-if="user.can_edit && (user.role === 'operator' || user.role === 'viewer')">
+<template x-if="user.can_edit && (user.role === 'operator' || user.role === 'viewer')">
                                             <button @click="openMachineModal(user)"
                                                     class="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors">
                                                 <span x-text="user.machine_id ? 'Machine ✓' : 'Assign Machine'"></span>
+                                            </button>
+                                        </template>
+                                        <template x-if="user.can_edit">
+                                            <button @click="openPermDrawer(user)"
+                                                    class="rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors">
+                                                Permissions
                                             </button>
                                         </template>
                                         <template x-if="user.can_reassign && user.role">
@@ -295,41 +297,6 @@
         </div>
     </template>
 
-    {{-- ASSIGN ROLE MODAL --}}
-    <template x-if="assignModal.open">
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-             @click.self="assignModal.open = false">
-            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-                <h3 class="text-base font-semibold text-gray-900 mb-1">Assign Role</h3>
-                <p class="text-sm text-gray-500 mb-4">
-                    Assign a role to <strong x-text="assignModal.user?.name"></strong>
-                </p>
-                <template x-if="assignModal.assignableRoles.length === 0">
-                    <p class="text-sm text-gray-400 italic">Loading roles…</p>
-                </template>
-                <div class="space-y-2 mb-5">
-                    <template x-for="r in assignModal.assignableRoles" :key="r.value">
-                        <label class="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-200 px-3 py-2.5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
-                               :class="assignModal.selectedRole === r.value ? 'border-indigo-400 bg-indigo-50' : ''">
-                            <input type="radio" :value="r.value" x-model="assignModal.selectedRole"
-                                   class="text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-sm font-medium text-gray-800" x-text="r.label"></span>
-                        </label>
-                    </template>
-                </div>
-                <div class="flex items-center gap-3 justify-end">
-                    <button @click="assignModal.open = false"
-                            class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
-                    <button @click="submitAssign()"
-                            :disabled="!assignModal.selectedRole || assignModal.saving"
-                            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                        <span x-show="!assignModal.saving">Assign</span>
-                        <span x-show="assignModal.saving">Saving…</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </template>
 
     {{-- ASSIGN MACHINE MODAL --}}
     <template x-if="machineModal.open">
@@ -369,13 +336,152 @@
         </div>
     </template>
 
+    {{-- PERMISSION DRAWER — backdrop --}}
+    <div x-show="permDrawer.open" x-cloak
+         class="fixed inset-0 z-40 bg-black/30"
+         @click="permDrawer.open = false"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"></div>
+
+    {{-- PERMISSION DRAWER — panel --}}
+    <div x-show="permDrawer.open" x-cloak
+         class="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col bg-white shadow-2xl"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="translate-x-full"
+         x-transition:enter-end="translate-x-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="translate-x-0"
+         x-transition:leave-end="translate-x-full">
+
+        {{-- Drawer header --}}
+        <div class="flex items-center gap-3 border-b border-gray-200 px-6 py-4 shrink-0">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700"
+                 x-text="permDrawer.user?.name?.charAt(0)?.toUpperCase()"></div>
+            <div class="min-w-0 flex-1">
+                <p class="font-semibold text-gray-900 truncate" x-text="permDrawer.user?.name"></p>
+                <p class="text-xs text-gray-400 truncate" x-text="permDrawer.user?.email"></p>
+            </div>
+            <span x-show="permDrawer.user?.role_label"
+                  class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 shrink-0"
+                  x-text="permDrawer.user?.role_label"></span>
+            <button @click="permDrawer.open = false"
+                    class="ml-1 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        {{-- Loading state --}}
+        <div x-show="permDrawer.loading" class="flex flex-1 items-center justify-center">
+            <p class="text-sm text-gray-400 animate-pulse">Loading permissions…</p>
+        </div>
+
+        {{-- Drawer content --}}
+        <div x-show="!permDrawer.loading" class="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+            {{-- Role Assignment --}}
+            <div>
+                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Assign Role</h4>
+                <div x-show="permDrawer.loadingRoles" class="text-sm text-gray-400 animate-pulse">Loading roles…</div>
+                <div x-show="!permDrawer.loadingRoles" class="flex flex-wrap gap-2">
+                    <template x-for="r in permDrawer.assignableRoles" :key="r.value">
+                        <label class="flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                               :class="permDrawer.selectedRole === r.value
+                                   ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                                   : 'border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50'">
+                            <input type="radio" :value="r.value" x-model="permDrawer.selectedRole"
+                                   class="text-indigo-600 focus:ring-indigo-500">
+                            <span x-text="r.label"></span>
+                        </label>
+                    </template>
+                    <label class="flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                           :class="permDrawer.selectedRole === ''
+                               ? 'border-red-300 bg-red-50 text-red-600'
+                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50'">
+                        <input type="radio" value="" x-model="permDrawer.selectedRole"
+                               class="text-red-500 focus:ring-red-400">
+                        <span>No Role</span>
+                    </label>
+                </div>
+            </div>
+
+            {{-- Machine Assignment (operator / viewer only — based on selected role) --}}
+            <div x-show="permDrawer.selectedRole === 'operator' || permDrawer.selectedRole === 'viewer'">
+                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Machine Assignment</h4>
+                <div x-show="permDrawer.loadingMachines" class="text-sm text-gray-400 animate-pulse">Loading machines…</div>
+                <select x-show="!permDrawer.loadingMachines"
+                        x-model="permDrawer.machineId"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400">
+                    <option value="">— No machine assigned —</option>
+                    <template x-for="m in permDrawer.machines" :key="m.id">
+                        <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
+                    </template>
+                </select>
+            </div>
+
+            {{-- Legend --}}
+            <div class="flex items-center gap-5 text-xs text-gray-500">
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-3.5 w-3.5 rounded border-2 border-gray-300 bg-gray-100"></span>
+                    Via role (read-only)
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-3.5 w-3.5 rounded border-2 border-violet-500 bg-violet-500"></span>
+                    Direct grant
+                </span>
+            </div>
+
+            {{-- Permission groups --}}
+            <template x-for="group in permGroups" :key="group.label">
+                <div>
+                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
+                        x-text="group.label"></h4>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <template x-for="perm in group.permissions" :key="perm.value">
+                            <label class="flex items-center gap-2 rounded-md px-2 py-1 transition-colors"
+                                   :class="isRolePerm(perm.value) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-violet-50 cursor-pointer'">
+                                <input type="checkbox"
+                                       :checked="isRolePerm(perm.value) || isDirectPerm(perm.value)"
+                                       :disabled="isRolePerm(perm.value)"
+                                       @change="!isRolePerm(perm.value) && togglePerm(perm.value)"
+                                       class="h-3.5 w-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500 disabled:opacity-50">
+                                <span class="text-xs text-gray-700 leading-snug" x-text="perm.label"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+        </div>
+
+        {{-- Drawer footer --}}
+        <div class="shrink-0 border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3">
+            <button @click="permDrawer.open = false"
+                    class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                Cancel
+            </button>
+            <button @click="savePermissions()"
+                    :disabled="permDrawer.saving || permDrawer.loading"
+                    class="rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                <span x-show="!permDrawer.saving">Save Changes</span>
+                <span x-show="permDrawer.saving">Saving…</span>
+            </button>
+        </div>
+
+    </div>{{-- end permission drawer --}}
+
 </div>{{-- end x-data --}}
 
 @endsection
 
 @push('scripts')
 <script>
-function userManager(apiToken, isSuperAdmin, factories) {
+function userManager(apiToken, isSuperAdmin, factories, permissionGroups) {
     return {
         users:      [],
         pagination: {},
@@ -383,6 +489,7 @@ function userManager(apiToken, isSuperAdmin, factories) {
         canCreate:  false,
         flash:      { type: '', message: '' },
         factories:  factories || [],
+        permGroups: permissionGroups || [],
 
         createModal: {
             open: false, saving: false, errors: {},
@@ -392,13 +499,15 @@ function userManager(apiToken, isSuperAdmin, factories) {
             open: false, saving: false, errors: {}, user: null,
             form: { name: '', email: '', password: '', factory_id: '', is_active: true },
         },
-        assignModal: {
-            open: false, saving: false, user: null,
-            assignableRoles: [], selectedRole: null,
-        },
-        machineModal: {
+machineModal: {
             open: false, saving: false, user: null,
             machines: [], loadingMachines: false, selectedMachineId: '',
+        },
+        permDrawer: {
+            open: false, loading: false, saving: false, user: null,
+            rolePerms: [], directPerms: [],
+            machineId: '', machines: [], loadingMachines: false,
+            selectedRole: '', assignableRoles: [], loadingRoles: false,
         },
 
         init() { this.loadUsers(1); },
@@ -509,42 +618,6 @@ function userManager(apiToken, isSuperAdmin, factories) {
             }
         },
 
-        async openAssign(user) {
-            this.assignModal = { open: true, user, assignableRoles: [], selectedRole: user.role ?? null, saving: false };
-            try {
-                const res  = await fetch(`/admin/users/${user.id}`, { headers: this.headers });
-                const data = await res.json();
-                this.assignModal.assignableRoles = data.data.assignable_roles ?? [];
-            } catch (e) {
-                this.setFlash('error', 'Could not load assignable roles.');
-                this.assignModal.open = false;
-            }
-        },
-
-        async submitAssign() {
-            if (!this.assignModal.selectedRole) return;
-            this.assignModal.saving = true;
-            try {
-                const res  = await fetch(`/admin/users/${this.assignModal.user.id}/assign-role`, {
-                    method:  'POST',
-                    headers: this.headers,
-                    body:    JSON.stringify({ role: this.assignModal.selectedRole }),
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    this.setFlash('error', data.message ?? 'Failed to assign role.');
-                } else {
-                    this.setFlash('success', data.message);
-                    this.assignModal.open = false;
-                    this.loadUsers(this.pagination.current_page);
-                }
-            } catch (e) {
-                this.setFlash('error', 'Network error. Please retry.');
-            } finally {
-                this.assignModal.saving = false;
-            }
-        },
-
         async revokeRole(user) {
             if (!confirm(`Revoke role from ${user.name}?`)) return;
             try {
@@ -606,6 +679,113 @@ function userManager(apiToken, isSuperAdmin, factories) {
                 this.setFlash('error', 'Network error. Please retry.');
             } finally {
                 this.machineModal.saving = false;
+            }
+        },
+
+        async openPermDrawer(user) {
+            this.permDrawer = {
+                open: true, loading: true, saving: false, user,
+                rolePerms: [], directPerms: [],
+                machineId: user.machine_id ?? '',
+                machines: [], loadingMachines: false,
+                selectedRole: user.role ?? '', assignableRoles: [], loadingRoles: true,
+            };
+            // Load permissions and assignable roles in parallel
+            try {
+                const [permRes, userRes] = await Promise.all([
+                    fetch(`/admin/users/${user.id}/permissions`, { headers: this.headers }),
+                    fetch(`/admin/users/${user.id}`, { headers: this.headers }),
+                ]);
+                const permData = await permRes.json();
+                const userData = await userRes.json();
+                this.permDrawer.rolePerms       = permData.role_permissions   ?? [];
+                this.permDrawer.directPerms     = permData.direct_permissions ?? [];
+                this.permDrawer.assignableRoles = userData.data?.assignable_roles ?? [];
+            } catch (e) {
+                this.setFlash('error', 'Could not load user data.');
+                this.permDrawer.open = false;
+                return;
+            } finally {
+                this.permDrawer.loading     = false;
+                this.permDrawer.loadingRoles = false;
+            }
+            // Load machines if user is operator/viewer
+            const role = this.permDrawer.selectedRole;
+            if (role === 'operator' || role === 'viewer') {
+                this.permDrawer.loadingMachines = true;
+                try {
+                    const factoryParam = user.factory_id ? `&factory_id=${user.factory_id}` : '';
+                    const res  = await fetch(`/api/v1/machines?per_page=200&status=active${factoryParam}`, { headers: this.headers });
+                    const data = await res.json();
+                    this.permDrawer.machines = data.data ?? [];
+                } catch (e) { /* non-fatal */ }
+                finally { this.permDrawer.loadingMachines = false; }
+            }
+        },
+
+        isRolePerm(value)   { return this.permDrawer.rolePerms.includes(value); },
+        isDirectPerm(value) { return this.permDrawer.directPerms.includes(value); },
+
+        togglePerm(value) {
+            const idx = this.permDrawer.directPerms.indexOf(value);
+            if (idx === -1) this.permDrawer.directPerms.push(value);
+            else            this.permDrawer.directPerms.splice(idx, 1);
+        },
+
+        async savePermissions() {
+            this.permDrawer.saving = true;
+            try {
+                const u           = this.permDrawer.user;
+                const origRole    = u.role ?? '';
+                const newRole     = this.permDrawer.selectedRole;
+
+                // 1. Role change
+                if (newRole !== origRole) {
+                    if (newRole) {
+                        const r = await fetch(`/admin/users/${u.id}/assign-role`, {
+                            method:  'POST',
+                            headers: this.headers,
+                            body:    JSON.stringify({ role: newRole }),
+                        });
+                        if (!r.ok) {
+                            const d = await r.json();
+                            this.setFlash('error', d.message ?? 'Failed to assign role.');
+                            return;
+                        }
+                    } else {
+                        await fetch(`/admin/users/${u.id}/revoke-role`, {
+                            method: 'DELETE', headers: this.headers,
+                        });
+                    }
+                }
+
+                // 2. Machine assignment (only for operator/viewer final role)
+                if (newRole === 'operator' || newRole === 'viewer') {
+                    await fetch(`/admin/users/${u.id}/assign-machine`, {
+                        method:  'POST',
+                        headers: this.headers,
+                        body:    JSON.stringify({ machine_id: this.permDrawer.machineId || null }),
+                    });
+                }
+
+                // 3. Direct permissions
+                const res  = await fetch(`/admin/users/${u.id}/sync-permissions`, {
+                    method:  'POST',
+                    headers: this.headers,
+                    body:    JSON.stringify({ permissions: this.permDrawer.directPerms }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    this.setFlash('error', data.message ?? 'Failed to save permissions.');
+                } else {
+                    this.setFlash('success', 'User updated successfully.');
+                    this.permDrawer.open = false;
+                    this.loadUsers(this.pagination.current_page);
+                }
+            } catch (e) {
+                this.setFlash('error', 'Network error. Please retry.');
+            } finally {
+                this.permDrawer.saving = false;
             }
         },
 

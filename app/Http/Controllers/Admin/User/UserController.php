@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Admin\User;
 
 use App\Domain\Auth\Services\PermissionService;
 use App\Domain\Factory\Models\Factory;
+use App\Domain\Machine\Models\Machine;
+use App\Domain\Shared\Enums\Permission;
 use App\Domain\Shared\Enums\Role as RoleEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\User\AssignRoleRequest;
@@ -49,10 +51,19 @@ class UserController extends Controller
                 ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])
                 : collect();
 
+            $permGroups = collect(Permission::groupedMatrix())->map(fn ($group) => [
+                'label'       => $group['label'],
+                'permissions' => collect($group['permissions'])->map(fn (Permission $p) => [
+                    'value' => $p->value,
+                    'label' => $p->label(),
+                ])->values()->toArray(),
+            ])->values()->toArray();
+
             return view('admin.users.index', [
-                'apiToken'  => session('api_token'),
-                'factoryId' => $authUser->factory_id,
-                'factories' => $factories,
+                'apiToken'          => session('api_token'),
+                'factoryId'         => $authUser->factory_id,
+                'factories'         => $factories,
+                'permissionGroups'  => $permGroups,
             ]);
         }
 
@@ -282,6 +293,68 @@ class UserController extends Controller
         }
 
         return response()->json(['message' => "All roles revoked from {$user->name}."]);
+    }
+
+    // ── permissions ──────────────────────────────────────────
+
+    /**
+     * GET /admin/users/{user}/permissions
+     *
+     * Returns the user's role-inherited permissions and direct-grant permissions
+     * so the employee permission UI can render checked/disabled states.
+     */
+    public function permissions(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('view', $user);
+        $this->abortIfCrossFactory($request->user(), $user);
+
+        $originalTeamId = $this->registrar->getPermissionsTeamId();
+        $this->registrar->setPermissionsTeamId($user->factory_id);
+        $user->unsetRelation('roles')->unsetRelation('permissions');
+
+        $rolePerms   = $user->getPermissionsViaRoles()->pluck('name')->values()->toArray();
+        $directPerms = $user->getDirectPermissions()->pluck('name')->values()->toArray();
+
+        $this->registrar->setPermissionsTeamId($originalTeamId);
+        $user->unsetRelation('roles')->unsetRelation('permissions');
+
+        return response()->json([
+            'role_permissions'   => $rolePerms,
+            'direct_permissions' => $directPerms,
+        ]);
+    }
+
+    // ── syncPermissions ───────────────────────────────────────
+
+    /**
+     * POST /admin/users/{user}/sync-permissions
+     *
+     * Replaces the user's DIRECT permissions (role permissions are unaffected).
+     * Body: { "permissions": ["create.downtime", "view.machine-logs", ...] }
+     */
+    public function syncPermissions(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('update', $user);
+        $this->abortIfCrossFactory($request->user(), $user);
+
+        $data = $request->validate([
+            'permissions'   => 'array',
+            'permissions.*' => 'string|exists:permissions,name',
+        ]);
+
+        $originalTeamId = $this->registrar->getPermissionsTeamId();
+        $this->registrar->setPermissionsTeamId($user->factory_id);
+        $user->unsetRelation('roles')->unsetRelation('permissions');
+
+        $user->syncPermissions($data['permissions'] ?? []);
+
+        $this->registrar->setPermissionsTeamId($originalTeamId);
+        $user->unsetRelation('roles')->unsetRelation('permissions');
+
+        return response()->json([
+            'message'            => "Permissions updated for {$user->name}.",
+            'direct_permissions' => collect($data['permissions'] ?? [])->values()->toArray(),
+        ]);
     }
 
     // ── Private Helpers ───────────────────────────────────────

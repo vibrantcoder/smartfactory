@@ -51,10 +51,12 @@
 >
     <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" @click="showModal = false"></div>
 
-    <div class="modal-in relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" @click.stop>
+    {{-- Modal panel: flex-col so header+footer are fixed and content area scrolls --}}
+    <div class="modal-in relative z-10 w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col"
+         style="max-height: calc(100vh - 2.5rem)" @click.stop>
 
-        {{-- ── Header ─────────────────────────────────── --}}
-        <div class="flex items-start justify-between px-6 py-4 border-b border-gray-100">
+        {{-- ── Header (always visible) ─────────────────── --}}
+        <div class="flex items-start justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
             <div>
                 <h2 class="text-base font-bold text-gray-900"
                     x-text="modalMode === 'create' ? 'New Production Plan' : 'Edit Production Plan'"></h2>
@@ -68,123 +70,361 @@
             </button>
         </div>
 
-        {{-- ── Error banner ────────────────────────────── --}}
-        <div x-show="formError" x-cloak
-             class="mx-6 mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700"
-             x-text="formError"></div>
-
-        {{-- ── Status strip (edit only) ─────────────────── --}}
+        {{-- ── Status strip (edit only, always visible) ─── --}}
         <template x-if="modalMode === 'edit'">
-            <div class="px-6 pt-4 pb-2">
-                <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Status</p>
-                <div class="flex flex-wrap gap-1.5">
-                    <template x-for="s in statuses" :key="s.value">
-                        <button
-                            @click="form.status = s.value"
-                            :class="form.status === s.value ? s.activeClass : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'"
-                            class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-                            x-text="s.label"
-                        ></button>
-                    </template>
+            <div class="px-6 py-3 bg-slate-50 border-b border-gray-100 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Status</span>
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="s in statuses" :key="s.value">
+                            <button
+                                @click="form.status = s.value"
+                                :class="form.status === s.value ? s.activeClass : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'"
+                                class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                                x-text="s.label"
+                            ></button>
+                        </template>
+                    </div>
                 </div>
             </div>
         </template>
 
-        {{-- ── Form fields ──────────────────────────────── --}}
-        <div class="px-6 py-4 space-y-4">
+        {{-- ── Scrollable content area ─────────────────── --}}
+        <div class="flex-1 overflow-y-auto min-h-0">
 
-            <div class="grid grid-cols-2 gap-3">
-                {{-- Machine --}}
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Machine</label>
-                    <select x-model="form.machine_id"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
-                        <option value="">Select machine…</option>
-                        <template x-for="m in machines" :key="m.id">
-                            <option :value="m.id" x-text="m.name + ' (' + m.code + ')'"></option>
+            {{-- Error banner --}}
+            <div x-show="formError" x-cloak
+                 class="mx-6 mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700 flex items-start gap-2"
+                 x-text="formError"></div>
+
+            <div class="px-6 py-4 space-y-4">
+
+                {{-- Row 1: Machine + Shift --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Machine</label>
+                        <select x-model="form.machine_id"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                            <option value="">Select machine…</option>
+                            <template x-for="m in machines" :key="m.id">
+                                <option :value="m.id" x-text="m.name + ' (' + m.code + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Shift</label>
+                        <select x-model="form.shift_id"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                            <option value="">Select shift…</option>
+                            <template x-for="s in shifts" :key="s.id">
+                                <option :value="s.id" x-text="s.name + ' (' + s.start_time.slice(0,5) + '–' + s.end_time.slice(0,5) + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                {{-- Row 2: Date + Qty --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Production Date</label>
+                        <input type="date" x-model="form.planned_date"
+                               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Planned Qty</label>
+                        <input type="number" x-model.number="form.planned_qty" min="1"
+                               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                               placeholder="100">
+                    </div>
+                </div>
+
+                {{-- Row 3: Part + Process Step (side by side) --}}
+                <div class="grid grid-cols-2 gap-3">
+                    {{-- Part --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Part</label>
+                        <select x-model="form.part_id" @change="form.part_process_id = ''"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                            <option value="">Select part…</option>
+                            <template x-for="p in parts" :key="p.id">
+                                <option :value="p.id" x-text="p.part_number + ' — ' + p.name"></option>
+                            </template>
+                        </select>
+                        <template x-if="selectedPart">
+                            <p class="mt-1 text-xs text-indigo-500">
+                                Std: <span class="font-semibold" x-text="selectedPart.cycle_time_std + 's'"></span>
+                                <span x-show="cycleTimeHint" class="text-gray-400 ml-1">· <span x-text="cycleTimeHint"></span></span>
+                            </p>
                         </template>
-                    </select>
-                </div>
+                    </div>
 
-                {{-- Shift --}}
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Shift</label>
-                    <select x-model="form.shift_id"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
-                        <option value="">Select shift…</option>
-                        <template x-for="s in shifts" :key="s.id">
-                            <option :value="s.id" x-text="s.name + ' (' + s.start_time.slice(0,5) + '–' + s.end_time.slice(0,5) + ')'"></option>
+                    {{-- Process Step --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">
+                            Process Step
+                            <span x-show="selectedPartProcesses.length > 0" class="text-red-400 ml-0.5">*</span>
+                        </label>
+
+                        {{-- No part selected --}}
+                        <template x-if="!selectedPart">
+                            <div class="w-full rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm text-gray-300 bg-gray-50/60 italic">
+                                Select a part first
+                            </div>
                         </template>
-                    </select>
-                </div>
-            </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                {{-- Date --}}
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Production Date</label>
-                    <input type="date" x-model="form.planned_date"
-                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                        {{-- Part selected — show process dropdown --}}
+                        <template x-if="selectedPart && selectedPartProcesses.length > 0">
+                            <select x-model="form.part_process_id"
+                                    class="w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 transition-colors"
+                                    :class="form.part_process_id
+                                        ? 'border-indigo-300 bg-indigo-50/40 text-indigo-900'
+                                        : 'border-amber-300 bg-amber-50/60'">
+                                <option value="">— select step —</option>
+                                <template x-for="step in selectedPartProcesses" :key="step.id">
+                                    <option :value="step.id"
+                                            x-text="'Step ' + step.sequence_order + ': ' + (step.process_master?.name || '?') + ' (' + effectiveCycleTime(step).toFixed(1) + ' min)'">
+                                    </option>
+                                </template>
+                            </select>
+                        </template>
+
+                        {{-- Part has no routing --}}
+                        <template x-if="selectedPart && selectedPartProcesses.length === 0">
+                            <div class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400 bg-gray-50">
+                                No routing defined
+                            </div>
+                        </template>
+
+                        {{-- Status hint below dropdown --}}
+                        <template x-if="selectedPartProcesses.length > 0">
+                            <p class="mt-1 text-[11px] leading-tight"
+                               :class="form.part_process_id ? 'text-indigo-500' : 'text-amber-500'">
+                                <span x-show="!form.part_process_id">⚠ Select the step this machine runs</span>
+                                <span x-show="form.part_process_id && selectedProcess"
+                                      x-text="selectedProcess ? '✓ ' + selectedProcess.process_master?.name + '  ·  ' + effectiveCycleTime(selectedProcess).toFixed(1) + ' min/unit' : ''"></span>
+                            </p>
+                        </template>
+                    </div>
                 </div>
 
-                {{-- Qty --}}
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Planned Qty</label>
-                    <input type="number" x-model.number="form.planned_qty" min="1"
-                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-                           placeholder="100">
-                </div>
-            </div>
-
-            {{-- Part --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Part</label>
-                <select x-model="form.part_id"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
-                    <option value="">Select part…</option>
-                    <template x-for="p in parts" :key="p.id">
-                        <option :value="p.id" x-text="p.part_number + '  —  ' + p.name"></option>
-                    </template>
-                </select>
-                <template x-if="selectedPart">
-                    <p class="mt-1 text-xs text-indigo-600">
-                        Cycle time: <span class="font-semibold" x-text="selectedPart.cycle_time_std + 's/unit'"></span>
-                        <span x-show="cycleTimeHint" class="text-gray-400 ml-1">≈ <span x-text="cycleTimeHint"></span></span>
-                    </p>
+                {{-- Factory (super-admin create) --}}
+                <template x-if="factories.length > 0 && modalMode === 'create'">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Factory</label>
+                        <select x-model="form.factory_id"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                            <option value="">Select factory…</option>
+                            <template x-for="f in factories" :key="f.id">
+                                <option :value="f.id" x-text="f.name"></option>
+                            </template>
+                        </select>
+                    </div>
                 </template>
-            </div>
 
-            {{-- Factory (super-admin create) --}}
-            <template x-if="factories.length > 0 && modalMode === 'create'">
+                {{-- ── Process Flow Panel ──────────────────── --}}
+                <template x-if="selectedPartProcesses.length > 0">
+                    <div class="rounded-xl border border-indigo-100 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
+
+                        {{-- Panel header --}}
+                        <div class="flex items-center justify-between px-4 py-2.5 bg-indigo-600 text-white">
+                            <div class="flex items-center gap-2">
+                                <svg class="h-3.5 w-3.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                                </svg>
+                                <span class="text-xs font-bold tracking-wide">Manufacturing Routing</span>
+                            </div>
+                            <span class="text-[10px] opacity-70">Click a step to assign</span>
+                        </div>
+
+                        {{-- Step cards row --}}
+                        <div class="flex items-center overflow-x-auto px-3 py-3 gap-0">
+                            <template x-for="(step, idx) in selectedPartProcesses" :key="step.id">
+                                <div class="flex items-center shrink-0">
+                                    {{-- Step card (clickable) --}}
+                                    <button type="button"
+                                            @click="form.part_process_id = (form.part_process_id == step.id ? '' : step.id)"
+                                            class="flex flex-col items-center rounded-xl border-2 px-2.5 py-2.5 text-center transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 group"
+                                            style="min-width:86px"
+                                            :class="form.part_process_id == step.id
+                                                ? 'border-indigo-500 bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                                                : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:shadow-sm'">
+
+                                        {{-- Step number badge --}}
+                                        <span class="text-[9px] font-bold mb-1 px-1.5 py-0.5 rounded-full"
+                                              :class="form.part_process_id == step.id ? 'bg-indigo-500 text-indigo-100' : 'bg-gray-100 text-gray-500'"
+                                              x-text="'STEP ' + step.sequence_order"></span>
+
+                                        {{-- Process name --}}
+                                        <p class="text-[11px] font-bold leading-tight w-full truncate"
+                                           x-text="step.process_master?.name || '—'"></p>
+
+                                        {{-- Cycle time --}}
+                                        <p class="mt-1 text-[12px] font-extrabold"
+                                           :class="form.part_process_id == step.id ? 'text-indigo-200' : 'text-indigo-600'"
+                                           x-text="effectiveCycleTime(step).toFixed(1) + ' min'"></p>
+
+                                        {{-- In/Out badge + checkmark --}}
+                                        <div class="mt-1.5 flex items-center gap-1 justify-center">
+                                            <span class="rounded-full px-1.5 py-0.5 text-[8px] font-bold leading-none"
+                                                  :class="form.part_process_id == step.id
+                                                      ? (step.process_type === 'outside' ? 'bg-orange-400/80 text-white' : 'bg-emerald-400/80 text-white')
+                                                      : (step.process_type === 'outside' ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600')"
+                                                  x-text="step.process_type === 'outside' ? 'Outside' : 'In-house'"></span>
+                                            <svg x-show="form.part_process_id == step.id"
+                                                 class="h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                            </svg>
+                                        </div>
+                                    </button>
+
+                                    {{-- Arrow between steps --}}
+                                    <div class="flex items-center px-1 text-gray-300 shrink-0">
+                                        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- Output node --}}
+                            <div class="flex flex-col items-center rounded-xl border-2 border-green-300 bg-green-50 px-2.5 py-2.5 text-center shrink-0"
+                                 style="min-width:76px">
+                                <span class="text-[9px] font-bold text-green-500 mb-1 px-1.5 py-0.5 bg-green-100 rounded-full">OUTPUT</span>
+                                <p class="text-[14px] font-extrabold text-green-700 leading-none">
+                                    <span x-text="form.planned_qty || '?'"></span>
+                                </p>
+                                <p class="text-[10px] text-green-600 mt-0.5">pcs</p>
+                                <p class="mt-1 text-[10px] text-green-500 font-medium"
+                                   x-text="totalCycleTime.toFixed(1) + ' min/pc'"></p>
+                            </div>
+                        </div>
+
+                        {{-- Summary bar --}}
+                        <div class="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100 bg-white/60">
+                            <div class="px-3 py-2.5 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400">Total Cycle</p>
+                                <p class="mt-0.5 text-sm font-extrabold text-gray-800"
+                                   x-text="totalCycleTime.toFixed(2) + ' min'"></p>
+                                <p class="text-[9px] text-gray-400">per unit</p>
+                            </div>
+                            <div class="px-3 py-2.5 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400">Shift Target</p>
+                                <p class="mt-0.5 text-sm font-extrabold"
+                                   :class="shiftTarget ? 'text-indigo-700' : 'text-gray-300'"
+                                   x-text="shiftTarget ? shiftTarget.target + ' units' : '—'"></p>
+                                <p class="text-[9px] text-gray-400"
+                                   x-text="shiftTarget ? '@ 85% OEE · ' + shiftTarget.shiftName : 'select shift'"></p>
+                            </div>
+                            <div class="px-3 py-2.5 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-widest text-gray-400">Est. Duration</p>
+                                <p class="mt-0.5 text-sm font-extrabold"
+                                   :class="estimatedDuration ? 'text-gray-800' : 'text-gray-300'"
+                                   x-text="estimatedDuration || '—'"></p>
+                                <p class="text-[9px] text-gray-400"
+                                   x-text="(form.planned_qty || '?') + ' pcs'"></p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                {{-- Notes --}}
                 <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Factory</label>
-                    <select x-model="form.factory_id"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
-                        <option value="">Select factory…</option>
-                        <template x-for="f in factories" :key="f.id">
-                            <option :value="f.id" x-text="f.name"></option>
-                        </template>
-                    </select>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">
+                        Notes <span class="text-gray-300 font-normal">(optional)</span>
+                    </label>
+                    <textarea x-model="form.notes" rows="2" placeholder="Additional notes…"
+                              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none"></textarea>
+                </div>
+
+            </div>{{-- /form fields --}}
+
+            {{-- ══════════════════════════════════════════════
+                 RECORD ACTUALS — Edit mode, in_progress/scheduled
+            ══════════════════════════════════════════════ --}}
+            <template x-if="modalMode === 'edit' && editPlan && ['in_progress','scheduled'].includes(editPlan.status)">
+                <div class="border-t border-emerald-100 bg-emerald-50/50 px-6 py-4">
+                    <h4 class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-emerald-700 mb-3">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Record Actual Output
+                    </h4>
+
+                    {{-- Running totals --}}
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <div class="rounded-lg bg-white border border-emerald-100 px-3 py-2 text-center">
+                            <p class="text-sm font-bold text-emerald-700"
+                               x-text="Number(editPlan.good_qty_sum || 0).toLocaleString()"></p>
+                            <p class="text-[10px] text-gray-400 mt-0.5">Good Today</p>
+                        </div>
+                        <div class="rounded-lg bg-white border border-red-100 px-3 py-2 text-center">
+                            <p class="text-sm font-bold text-red-500"
+                               x-text="Number(Math.max(0,(editPlan.actual_qty_sum||0)-(editPlan.good_qty_sum||0))).toLocaleString()"></p>
+                            <p class="text-[10px] text-gray-400 mt-0.5">Rejects</p>
+                        </div>
+                        <div class="rounded-lg bg-white border border-indigo-100 px-3 py-2 text-center">
+                            <p class="text-sm font-bold text-indigo-700"
+                               x-text="editPlan.planned_qty > 0
+                                   ? Math.round((editPlan.good_qty_sum||0) / editPlan.planned_qty * 100) + '%'
+                                   : '—'"></p>
+                            <p class="text-[10px] text-gray-400 mt-0.5">Attainment</p>
+                        </div>
+                    </div>
+
+                    {{-- Attainment progress bar --}}
+                    <div class="mb-3">
+                        <div class="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                            <div class="h-2 rounded-full transition-all bg-emerald-500"
+                                 :style="`width:${Math.min(100,Math.round((editPlan.good_qty_sum||0)/(editPlan.planned_qty||1)*100))}%`"></div>
+                        </div>
+                    </div>
+
+                    {{-- Input row --}}
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-600 mb-1">
+                                Good Parts <span class="text-red-400">*</span>
+                            </label>
+                            <input type="number" x-model.number="actualsForm.actual_qty" min="0"
+                                   placeholder="0"
+                                   class="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm
+                                          focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-300">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-medium text-gray-600 mb-1">Defects / Rejects</label>
+                            <input type="number" x-model.number="actualsForm.defect_qty" min="0"
+                                   placeholder="0"
+                                   class="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm
+                                          focus:border-red-300 focus:outline-none focus:ring-1 focus:ring-red-200">
+                        </div>
+                    </div>
+                    <input type="text" x-model="actualsForm.notes" placeholder="Notes (optional)"
+                           class="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs mb-2
+                                  focus:border-gray-400 focus:outline-none resize-none">
+                    <template x-if="actualsError">
+                        <p class="text-[10px] text-red-600 mb-1.5" x-text="actualsError"></p>
+                    </template>
+                    <button @click="saveActuals()" :disabled="savingActuals"
+                            class="w-full rounded-lg bg-emerald-600 py-2 text-xs font-semibold text-white
+                                   hover:bg-emerald-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-1.5">
+                        <svg x-show="savingActuals" class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span x-text="savingActuals ? 'Saving…' : 'Save Output'"></span>
+                    </button>
                 </div>
             </template>
 
-            {{-- Notes --}}
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">
-                    Notes <span class="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <textarea x-model="form.notes" rows="2" placeholder="Additional notes…"
-                          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none"></textarea>
-            </div>
-        </div>
+        </div>{{-- /scrollable content --}}
 
-        {{-- ── Footer ───────────────────────────────────── --}}
-        <div class="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-100">
-            {{-- Delete button (edit mode only, non-immutable) --}}
+        {{-- ── Footer (always visible) ─────────────────── --}}
+        <div class="flex items-center justify-between px-6 py-3.5 bg-gray-50/80 border-t border-gray-100 flex-shrink-0">
             <div>
                 <template x-if="modalMode === 'edit'">
                     <button @click="deletePlan()" :disabled="deleting"
-                            class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors">
+                            class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 transition-colors">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                         </svg>
@@ -193,14 +433,13 @@
                 </template>
                 <template x-if="modalMode !== 'edit'"><span></span></template>
             </div>
-
             <div class="flex gap-2">
                 <button @click="showModal = false"
                         class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                     Cancel
                 </button>
                 <button @click="savePlan()" :disabled="saving"
-                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60 transition-colors flex items-center gap-1.5">
                     <svg x-show="saving" class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
@@ -209,6 +448,7 @@
                 </button>
             </div>
         </div>
+
     </div>
 </div>
 
@@ -265,15 +505,25 @@
     </div>
 
     {{-- Right side --}}
-    <div class="ml-auto flex items-center gap-4">
+    <div class="ml-auto flex items-center gap-3">
         {{-- Legend --}}
         <div class="hidden xl:flex items-center gap-3 text-xs text-gray-500">
             <span class="flex items-center gap-1.5"><span class="status-dot bg-gray-400"></span>Draft</span>
             <span class="flex items-center gap-1.5"><span class="status-dot bg-blue-500"></span>Scheduled</span>
             <span class="flex items-center gap-1.5"><span class="status-dot bg-amber-500"></span>In Progress</span>
             <span class="flex items-center gap-1.5"><span class="status-dot bg-green-500"></span>Completed</span>
-            <span class="flex items-center gap-1.5"><span class="status-dot bg-red-400"></span>Cancelled</span>
         </div>
+
+        {{-- Workload toggle --}}
+        <button @click="showWorkload = !showWorkload"
+                :class="showWorkload ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+                class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            Workload
+        </button>
+
         <button @click="openCreate('', todayStr, '')"
                 class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm">
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -291,6 +541,113 @@
     <button @click="error = null" class="ml-3 text-red-400 hover:text-red-600 font-medium">✕</button>
 </div>
 
+{{-- ══════════════════════════════════════════════════════════
+     PROCESS WORKLOAD PANEL (collapsible)
+     Shows: Process → Machines running it → daily qty totals
+══════════════════════════════════════════════════════════ --}}
+<div x-show="showWorkload" x-cloak
+     class="shrink-0 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-white overflow-x-auto">
+    <div class="px-5 py-3">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold text-violet-700 uppercase tracking-widest flex items-center gap-1.5">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                Process Workload — <span x-text="weekLabel"></span>
+            </h3>
+            <span class="text-[10px] text-violet-400">Total planned pieces per process per day (excludes cancelled)</span>
+        </div>
+
+        <template x-if="processWorkload.length === 0">
+            <p class="text-sm text-gray-400 py-2">No plans with assigned process steps found for this week.</p>
+        </template>
+
+        <template x-if="processWorkload.length > 0">
+            <table class="w-full text-xs border-separate" style="border-spacing:0">
+                <thead>
+                    <tr>
+                        <th class="text-left py-1.5 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap" style="min-width:160px">
+                            Process / Machine
+                        </th>
+                        <template x-for="day in weekDays" :key="day.date">
+                            <th class="text-center py-1.5 px-2 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap"
+                                :class="day.isToday ? 'text-indigo-600' : 'text-gray-400'"
+                                style="min-width:72px">
+                                <span x-text="day.label"></span><br>
+                                <span class="font-extrabold text-sm" x-text="day.dayNum"></span>
+                            </th>
+                        </template>
+                        <th class="text-center py-1.5 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Total
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(proc, pi) in processWorkload" :key="proc.name">
+                        {{-- Process header row --}}
+                        <tr class="border-t border-violet-100">
+                            <td class="py-2 pr-4 font-bold text-violet-700 bg-violet-50/60" style="border-radius:6px 0 0 0">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="inline-block h-2 w-2 rounded-full bg-violet-400 flex-shrink-0"></span>
+                                    <span x-text="proc.name"></span>
+                                </div>
+                                <span class="ml-3.5 text-[10px] text-violet-400 font-normal"
+                                      x-text="proc.machineCount + ' machine' + (proc.machineCount !== 1 ? 's' : '')"></span>
+                            </td>
+                            <template x-for="day in weekDays" :key="day.date">
+                                <td class="py-2 px-2 text-center bg-violet-50/40 font-bold"
+                                    :class="proc.byDay[day.date] ? 'text-violet-700' : 'text-gray-200'">
+                                    <span x-show="proc.byDay[day.date]" x-text="proc.byDay[day.date]?.toLocaleString()"></span>
+                                    <span x-show="!proc.byDay[day.date]" class="text-gray-200">—</span>
+                                </td>
+                            </template>
+                            <td class="py-2 px-2 text-center bg-violet-100 font-extrabold text-violet-800 rounded-r"
+                                x-text="proc.weekTotal.toLocaleString()"></td>
+                        </tr>
+                        {{-- Machine sub-rows --}}
+                        <template x-for="mach in proc.machines" :key="mach.machineId">
+                            <tr>
+                                <td class="py-1 pr-4 pl-5 text-gray-500">
+                                    <div class="flex items-center gap-1">
+                                        <svg class="h-2.5 w-2.5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                        <span x-text="mach.machineName" class="font-medium text-gray-600"></span>
+                                        <span class="text-gray-300 text-[9px]" x-text="mach.machineCode"></span>
+                                    </div>
+                                </td>
+                                <template x-for="day in weekDays" :key="day.date">
+                                    <td class="py-1 px-2 text-center"
+                                        :class="day.isToday ? 'bg-indigo-50/30' : ''">
+                                        <template x-if="mach.byDay[day.date]">
+                                            <div>
+                                                <span class="font-semibold text-gray-700" x-text="mach.byDay[day.date].qty.toLocaleString()"></span>
+                                                <span class="text-[9px] text-gray-400 ml-0.5">pcs</span>
+                                                <div class="text-[8px] mt-0.5"
+                                                     :class="{
+                                                        'text-gray-400': mach.byDay[day.date].status === 'draft',
+                                                        'text-blue-500': mach.byDay[day.date].status === 'scheduled',
+                                                        'text-amber-500': mach.byDay[day.date].status === 'in_progress',
+                                                        'text-green-500': mach.byDay[day.date].status === 'completed'
+                                                     }"
+                                                     x-text="mach.byDay[day.date].statusLabel"></div>
+                                            </div>
+                                        </template>
+                                        <template x-if="!mach.byDay[day.date]">
+                                            <span class="text-gray-200">—</span>
+                                        </template>
+                                    </td>
+                                </template>
+                                <td class="py-1 px-2 text-center text-gray-600 font-semibold"
+                                    x-text="mach.weekTotal.toLocaleString()"></td>
+                            </tr>
+                        </template>
+                    </template>
+                </tbody>
+            </table>
+        </template>
+    </div>
+</div>
 
 {{-- ══════════════════════════════════════════════════════════
      CALENDAR TABLE
@@ -373,10 +730,27 @@
                                                         </div>
                                                         <p class="text-xs font-bold truncate leading-tight"
                                                            x-text="plan.part?.part_number || '—'"></p>
+                                                        <p class="text-[10px] mt-0.5 font-medium truncate opacity-80"
+                                                           x-show="plan.part_process?.process_master?.name"
+                                                           x-text="'↳ ' + (plan.part_process?.process_master?.name || '')"></p>
                                                         <p class="text-[10px] mt-1 opacity-60 truncate">
                                                             <span x-text="Number(plan.planned_qty).toLocaleString()"></span> pcs
                                                             &middot; <span x-text="slot.shiftName"></span>
                                                         </p>
+                                                        {{-- Good Qty / Attainment bar --}}
+                                                        <template x-if="(plan.actual_qty_sum || 0) > 0">
+                                                            <div class="mt-1.5">
+                                                                <div class="flex items-center justify-between text-[9px] font-medium opacity-80 mb-0.5">
+                                                                    <span>Good: <span x-text="Number(plan.good_qty_sum || 0).toLocaleString()"></span></span>
+                                                                    <span x-text="Math.round((plan.good_qty_sum||0) / plan.planned_qty * 100) + '%'"></span>
+                                                                </div>
+                                                                <div class="h-1 w-full rounded-full bg-black/10 overflow-hidden">
+                                                                    <div class="h-1 rounded-full transition-all"
+                                                                         :class="Math.round((plan.good_qty_sum||0)/plan.planned_qty*100) >= 100 ? 'bg-green-500' : 'bg-emerald-400'"
+                                                                         :style="`width:${Math.min(100,Math.round((plan.good_qty_sum||0)/plan.planned_qty*100))}%`"></div>
+                                                                </div>
+                                                            </div>
+                                                        </template>
                                                     </button>
                                                 </template>
                                                 {{-- Compact "add another part" button --}}
@@ -448,6 +822,7 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         loading: false,
         error:   null,
         weekStart: null,
+        showWorkload: false,
 
         // Modal state
         showModal:  false,
@@ -457,15 +832,21 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         formError:  null,
         editPlan:   null,
 
+        // Record Actuals state
+        actualsForm:   { actual_qty: 0, defect_qty: 0, notes: '' },
+        savingActuals: false,
+        actualsError:  null,
+
         form: {
-            machine_id:   '',
-            part_id:      '',
-            shift_id:     '',
-            planned_date: '',
-            planned_qty:  1,
-            status:       'draft',
-            factory_id:   '',
-            notes:        '',
+            machine_id:      '',
+            part_id:         '',
+            part_process_id: '',
+            shift_id:        '',
+            planned_date:    '',
+            planned_qty:     1,
+            status:          'draft',
+            factory_id:      '',
+            notes:           '',
         },
 
         statuses: [
@@ -542,6 +923,116 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             const h = Math.floor(mins / 60);
             const m = mins % 60;
             return h > 0 ? `${h}h ${m}m total` : `${m}m total`;
+        },
+
+        // ── Process flow getters ────────────────────────────
+
+        get selectedPartProcesses() {
+            return this.selectedPart?.processes || [];
+        },
+
+        get selectedProcess() {
+            if (!this.form.part_process_id || !this.selectedPartProcesses.length) return null;
+            return this.selectedPartProcesses.find(s => s.id == this.form.part_process_id) || null;
+        },
+
+        // ── Process Workload (groups plans by process → machine → day) ──
+        // Excludes cancelled plans. Used by the Workload panel.
+        get processWorkload() {
+            const excluded = ['cancelled'];
+            const active = this.plans.filter(p => !excluded.includes(p.status));
+
+            // Accumulate: processName → machineId → date → { qty, status }
+            const procMap = {};
+
+            for (const plan of active) {
+                const procName = plan.part_process?.process_master?.name || null;
+                if (!procName) continue; // skip plans without process assigned
+
+                const date      = plan.planned_date ? String(plan.planned_date).substring(0, 10) : '';
+                const machId    = plan.machine_id;
+                const machName  = plan.machine?.name  || '—';
+                const machCode  = plan.machine?.code  || '';
+                const qty       = plan.planned_qty || 0;
+                const status    = plan.status;
+
+                if (!procMap[procName]) procMap[procName] = { machines: {}, byDay: {}, weekTotal: 0 };
+                if (!procMap[procName].machines[machId]) {
+                    procMap[procName].machines[machId] = {
+                        machineId: machId, machineName: machName, machineCode: machCode,
+                        byDay: {}, weekTotal: 0,
+                    };
+                }
+
+                // Accumulate by day for process total
+                procMap[procName].byDay[date]  = (procMap[procName].byDay[date]  || 0) + qty;
+                procMap[procName].weekTotal   += qty;
+
+                // Accumulate by day for machine row (use dominant status)
+                const machDay = procMap[procName].machines[machId].byDay[date];
+                if (!machDay) {
+                    procMap[procName].machines[machId].byDay[date] = {
+                        qty, status,
+                        statusLabel: status.replace('_', ' '),
+                    };
+                } else {
+                    machDay.qty += qty;
+                    // escalate status: in_progress > scheduled > draft > completed
+                    const rank = { in_progress: 4, scheduled: 3, draft: 2, completed: 1 };
+                    if ((rank[status] || 0) > (rank[machDay.status] || 0)) {
+                        machDay.status      = status;
+                        machDay.statusLabel = status.replace('_', ' ');
+                    }
+                }
+                procMap[procName].machines[machId].weekTotal += qty;
+            }
+
+            // Convert to sorted array
+            return Object.entries(procMap)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name, data]) => ({
+                    name,
+                    byDay:        data.byDay,
+                    weekTotal:    data.weekTotal,
+                    machineCount: Object.keys(data.machines).length,
+                    machines: Object.values(data.machines)
+                        .sort((a, b) => a.machineName.localeCompare(b.machineName)),
+                }));
+        },
+
+        get totalCycleTime() {
+            const p = this.selectedPart;
+            if (!p) return 0;
+            const stored = parseFloat(p.total_cycle_time);
+            if (stored > 0) return stored;
+            return (p.processes || []).reduce((sum, s) => sum + this.effectiveCycleTime(s), 0);
+        },
+
+        get shiftTarget() {
+            const shift = this.shifts.find(s => s.id == this.form.shift_id);
+            const ct    = this.totalCycleTime;
+            if (!shift || ct <= 0) return null;
+            const effMin = Math.floor(shift.duration_min * 0.85);
+            return {
+                target:    Math.floor(effMin / ct),
+                shiftName: shift.name,
+            };
+        },
+
+        get estimatedDuration() {
+            const ct  = this.totalCycleTime;
+            const qty = parseInt(this.form.planned_qty) || 0;
+            if (!ct || !qty) return '';
+            const totalMin = Math.round(ct * qty);
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+        },
+
+        effectiveCycleTime(step) {
+            const override = parseFloat(step.standard_cycle_time);
+            if (!isNaN(override) && override > 0) return override;
+            return parseFloat(step.process_master?.standard_time) || 0;
         },
 
         get modalSubtitle() {
@@ -635,14 +1126,15 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.editPlan  = null;
             this.formError = null;
             this.form = {
-                machine_id:   machineId || '',
-                part_id:      '',
-                shift_id:     shiftId   || '',
-                planned_date: date      || this.todayStr,
-                planned_qty:  1,
-                status:       'draft',
-                factory_id:   this.currentFactoryId || '',
-                notes:        '',
+                machine_id:      machineId || '',
+                part_id:         '',
+                part_process_id: '',
+                shift_id:        shiftId   || '',
+                planned_date:    date      || this.todayStr,
+                planned_qty:     1,
+                status:          'draft',
+                factory_id:      this.currentFactoryId || '',
+                notes:           '',
             };
             this.showModal = true;
         },
@@ -652,16 +1144,70 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.editPlan  = plan;
             this.formError = null;
             this.form = {
-                machine_id:   plan.machine_id,
-                part_id:      plan.part_id,
-                shift_id:     plan.shift_id,
-                planned_date: plan.planned_date,
-                planned_qty:  plan.planned_qty,
-                status:       plan.status,
-                factory_id:   plan.factory_id || '',
-                notes:        plan.notes || '',
+                machine_id:      plan.machine_id,
+                part_id:         plan.part_id,
+                part_process_id: plan.part_process_id || '',
+                shift_id:        plan.shift_id,
+                planned_date:    plan.planned_date,
+                planned_qty:     plan.planned_qty,
+                status:          plan.status,
+                factory_id:      plan.factory_id || '',
+                notes:           plan.notes || '',
             };
+            this.actualsForm  = { actual_qty: 0, defect_qty: 0, notes: '' };
+            this.actualsError = null;
             this.showModal = true;
+        },
+
+        // ── Record Actuals ───────────────────────────────────
+
+        async saveActuals() {
+            if (!this.editPlan) return;
+            const goodParts = parseInt(this.actualsForm.actual_qty) || 0;
+            const defects   = parseInt(this.actualsForm.defect_qty) || 0;
+            if (goodParts < 0) { this.actualsError = 'Good parts must be ≥ 0.'; return; }
+            if (defects > goodParts) { this.actualsError = 'Defects cannot exceed good parts.'; return; }
+
+            this.savingActuals = true;
+            this.actualsError  = null;
+            try {
+                const res = await fetch('/api/v1/production-actuals', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.apiToken}`,
+                        'Accept':        'application/json',
+                        'Content-Type':  'application/json',
+                    },
+                    body: JSON.stringify({
+                        production_plan_id: this.editPlan.id,
+                        actual_qty:  goodParts,
+                        defect_qty:  defects,
+                        notes:       this.actualsForm.notes || null,
+                        recorded_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                    }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.message || `Error ${res.status}`);
+                }
+
+                // Update local totals on editPlan (no full reload needed)
+                this.editPlan.actual_qty_sum = (this.editPlan.actual_qty_sum || 0) + goodParts;
+                this.editPlan.good_qty_sum   = (this.editPlan.good_qty_sum   || 0) + (goodParts - defects);
+
+                // Sync into plans array so calendar card updates
+                const idx = this.plans.findIndex(p => p.id === this.editPlan.id);
+                if (idx >= 0) {
+                    this.plans[idx].actual_qty_sum = this.editPlan.actual_qty_sum;
+                    this.plans[idx].good_qty_sum   = this.editPlan.good_qty_sum;
+                }
+
+                this.actualsForm = { actual_qty: 0, defect_qty: 0, notes: '' };
+            } catch (e) {
+                this.actualsError = e.message;
+            } finally {
+                this.savingActuals = false;
+            }
         },
 
         // ── CRUD ────────────────────────────────────────────
@@ -670,6 +1216,10 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             if (!this.form.machine_id || !this.form.part_id ||
                 !this.form.shift_id   || !this.form.planned_date || !this.form.planned_qty) {
                 this.formError = 'Please fill in Machine, Part, Shift, Date and Planned Qty.';
+                return;
+            }
+            if (this.selectedPartProcesses.length > 0 && !this.form.part_process_id) {
+                this.formError = 'Please select the Process Step this machine will run.';
                 return;
             }
             this.saving    = true;

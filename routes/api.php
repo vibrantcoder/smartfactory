@@ -58,6 +58,8 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
             [\App\Http\Controllers\Api\V1\Production\ProcessMasterController::class, 'previewCycleTime']);
 
         // ── Production Plans ──────────────────────────────────────────────
+        Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\Production\WorkOrderController::class);
+
         Route::apiResource('production-plans', \App\Http\Controllers\Api\V1\Production\ProductionPlanController::class);
         Route::get('production-plans/{plan}/analysis',
             [\App\Http\Controllers\Api\V1\Production\ProductionAnalysisController::class, 'planAnalysis']);

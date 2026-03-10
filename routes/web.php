@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\Part\PartRoutingController;
 use App\Http\Controllers\Admin\ProcessMaster\ProcessMasterController as AdminProcessMasterController;
 use App\Http\Controllers\Admin\Production\CustomerController as AdminCustomerController;
 use App\Http\Controllers\Admin\Production\ProductionPlanController as AdminProductionPlanController;
+use App\Http\Controllers\Admin\Production\WorkOrderWebController as AdminWorkOrderController;
 use App\Http\Controllers\Admin\Production\ShiftController as AdminShiftController;
 use App\Http\Controllers\Admin\Role\RoleController;
 use App\Http\Controllers\Admin\User\UserController;
@@ -74,9 +75,10 @@ Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
             Route::get('/{part}', fn (Part $part) => redirect()->route('admin.parts.index'))->name('show');
         });
 
-        // Production Planning Calendar
+        // Production Planning Calendar + Work Orders
         Route::prefix('production')->name('production.')->group(function () {
-            Route::get('/plans', [AdminProductionPlanController::class, 'index'])->name('plans.index');
+            Route::get('/plans',       [AdminProductionPlanController::class, 'index'])->name('plans.index');
+            Route::get('/work-orders', [AdminWorkOrderController::class,      'index'])->name('work-orders.index');
         });
 
         // Shifts

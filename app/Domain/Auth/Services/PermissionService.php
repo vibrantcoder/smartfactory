@@ -58,7 +58,10 @@ class PermissionService
         $this->registrar->setPermissionsTeamId($factory->id);
 
         // Remove any existing factory-scoped role first (one role per user per factory)
+        // NOTE: revokeAllFactoryRoles() resets team_id to null at its end,
+        //       so we must re-set it here before calling assignRole.
         $this->revokeAllFactoryRoles($target, $factory);
+        $this->registrar->setPermissionsTeamId($factory->id);
 
         $target->assignRole($role->value);
 

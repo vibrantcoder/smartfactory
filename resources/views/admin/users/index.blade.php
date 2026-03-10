@@ -111,16 +111,20 @@
                                                 Edit
                                             </button>
                                         </template>
-<template x-if="user.can_edit && (user.role === 'operator' || user.role === 'viewer')">
-                                            <button @click="openMachineModal(user)"
-                                                    class="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors">
-                                                <span x-text="user.machine_id ? 'Machine ✓' : 'Assign Machine'"></span>
+                                        {{-- Dedicated Assign Role button --}}
+                                        <template x-if="user.can_reassign">
+                                            <button @click="openRoleModal(user)"
+                                                    class="rounded-lg px-2.5 py-1 text-xs font-medium transition-colors"
+                                                    :class="user.role
+                                                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                                        : 'bg-green-50 text-green-700 hover:bg-green-100'">
+                                                <span x-text="user.role ? '✎ Role' : '+ Assign Role'"></span>
                                             </button>
                                         </template>
                                         <template x-if="user.can_edit">
                                             <button @click="openPermDrawer(user)"
                                                     class="rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors">
-                                                Permissions
+                                                Perms
                                             </button>
                                         </template>
                                         <template x-if="user.can_reassign && user.role">
@@ -336,150 +340,277 @@
         </div>
     </template>
 
-    {{-- PERMISSION DRAWER — backdrop --}}
-    <div x-show="permDrawer.open" x-cloak
-         class="fixed inset-0 z-40 bg-black/30"
-         @click="permDrawer.open = false"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"></div>
+    {{-- ASSIGN ROLE MODAL --}}
+    <template x-if="roleModal.open">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+             @click.self="roleModal.open = false"
+             @keydown.escape.window="roleModal.open = false">
+            <div class="w-full max-w-md rounded-2xl bg-white shadow-xl">
 
-    {{-- PERMISSION DRAWER — panel --}}
-    <div x-show="permDrawer.open" x-cloak
-         class="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col bg-white shadow-2xl"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="translate-x-full"
-         x-transition:enter-end="translate-x-0"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="translate-x-0"
-         x-transition:leave-end="translate-x-full">
-
-        {{-- Drawer header --}}
-        <div class="flex items-center gap-3 border-b border-gray-200 px-6 py-4 shrink-0">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700"
-                 x-text="permDrawer.user?.name?.charAt(0)?.toUpperCase()"></div>
-            <div class="min-w-0 flex-1">
-                <p class="font-semibold text-gray-900 truncate" x-text="permDrawer.user?.name"></p>
-                <p class="text-xs text-gray-400 truncate" x-text="permDrawer.user?.email"></p>
-            </div>
-            <span x-show="permDrawer.user?.role_label"
-                  class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 shrink-0"
-                  x-text="permDrawer.user?.role_label"></span>
-            <button @click="permDrawer.open = false"
-                    class="ml-1 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors shrink-0">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        </div>
-
-        {{-- Loading state --}}
-        <div x-show="permDrawer.loading" class="flex flex-1 items-center justify-center">
-            <p class="text-sm text-gray-400 animate-pulse">Loading permissions…</p>
-        </div>
-
-        {{-- Drawer content --}}
-        <div x-show="!permDrawer.loading" class="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-
-            {{-- Role Assignment --}}
-            <div>
-                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Assign Role</h4>
-                <div x-show="permDrawer.loadingRoles" class="text-sm text-gray-400 animate-pulse">Loading roles…</div>
-                <div x-show="!permDrawer.loadingRoles" class="flex flex-wrap gap-2">
-                    <template x-for="r in permDrawer.assignableRoles" :key="r.value">
-                        <label class="flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-                               :class="permDrawer.selectedRole === r.value
-                                   ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                                   : 'border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50'">
-                            <input type="radio" :value="r.value" x-model="permDrawer.selectedRole"
-                                   class="text-indigo-600 focus:ring-indigo-500">
-                            <span x-text="r.label"></span>
-                        </label>
-                    </template>
-                    <label class="flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-                           :class="permDrawer.selectedRole === ''
-                               ? 'border-red-300 bg-red-50 text-red-600'
-                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50'">
-                        <input type="radio" value="" x-model="permDrawer.selectedRole"
-                               class="text-red-500 focus:ring-red-400">
-                        <span>No Role</span>
-                    </label>
+                {{-- Header --}}
+                <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">Assign Role</h3>
+                        <p class="text-xs text-gray-400 mt-0.5" x-text="roleModal.user?.name + ' — ' + roleModal.user?.email"></p>
+                    </div>
+                    <button @click="roleModal.open = false"
+                            class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 transition-colors">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
                 </div>
-            </div>
 
-            {{-- Machine Assignment (operator / viewer only — based on selected role) --}}
-            <div x-show="permDrawer.selectedRole === 'operator' || permDrawer.selectedRole === 'viewer'">
-                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Machine Assignment</h4>
-                <div x-show="permDrawer.loadingMachines" class="text-sm text-gray-400 animate-pulse">Loading machines…</div>
-                <select x-show="!permDrawer.loadingMachines"
-                        x-model="permDrawer.machineId"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400">
-                    <option value="">— No machine assigned —</option>
-                    <template x-for="m in permDrawer.machines" :key="m.id">
-                        <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
-                    </template>
-                </select>
-            </div>
+                {{-- Body --}}
+                <div class="px-6 py-5 space-y-5">
 
-            {{-- Legend --}}
-            <div class="flex items-center gap-5 text-xs text-gray-500">
-                <span class="flex items-center gap-1.5">
-                    <span class="inline-block h-3.5 w-3.5 rounded border-2 border-gray-300 bg-gray-100"></span>
-                    Via role (read-only)
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="inline-block h-3.5 w-3.5 rounded border-2 border-violet-500 bg-violet-500"></span>
-                    Direct grant
-                </span>
-            </div>
-
-            {{-- Permission groups --}}
-            <template x-for="group in permGroups" :key="group.label">
-                <div>
-                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
-                        x-text="group.label"></h4>
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                        <template x-for="perm in group.permissions" :key="perm.value">
-                            <label class="flex items-center gap-2 rounded-md px-2 py-1 transition-colors"
-                                   :class="isRolePerm(perm.value) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-violet-50 cursor-pointer'">
-                                <input type="checkbox"
-                                       :checked="isRolePerm(perm.value) || isDirectPerm(perm.value)"
-                                       :disabled="isRolePerm(perm.value)"
-                                       @change="!isRolePerm(perm.value) && togglePerm(perm.value)"
-                                       class="h-3.5 w-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500 disabled:opacity-50">
-                                <span class="text-xs text-gray-700 leading-snug" x-text="perm.label"></span>
-                            </label>
+                    {{-- Role radio buttons --}}
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Select Role</p>
+                        <template x-if="roleModal.loadingRoles">
+                            <p class="text-sm text-gray-400 animate-pulse">Loading roles…</p>
+                        </template>
+                        <template x-if="!roleModal.loadingRoles">
+                            <div class="space-y-2">
+                                {{-- No Role option --}}
+                                <label class="flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-colors"
+                                       :class="roleModal.selectedRole === ''
+                                           ? 'border-red-300 bg-red-50'
+                                           : 'border-gray-200 hover:border-gray-300'">
+                                    <input type="radio" value="" x-model="roleModal.selectedRole"
+                                           @change="roleModal.machines = []"
+                                           class="text-red-500 focus:ring-red-400">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-700">No Role</p>
+                                        <p class="text-xs text-gray-400">Revoke current role assignment</p>
+                                    </div>
+                                </label>
+                                {{-- Assignable roles --}}
+                                <template x-for="r in roleModal.assignableRoles" :key="r.value">
+                                    <label class="flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-colors"
+                                           :class="roleModal.selectedRole === r.value
+                                               ? 'border-indigo-400 bg-indigo-50'
+                                               : 'border-gray-200 hover:border-indigo-200'">
+                                        <input type="radio" :value="r.value" x-model="roleModal.selectedRole"
+                                               @change="onRoleModalRoleChange()"
+                                               class="text-indigo-600 focus:ring-indigo-500">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-700" x-text="r.label"></p>
+                                        </div>
+                                    </label>
+                                </template>
+                            </div>
                         </template>
                     </div>
+
+                    {{-- Machine dropdown — only for operator/viewer --}}
+                    <template x-if="roleModal.selectedRole === 'operator' || roleModal.selectedRole === 'viewer'">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Assign Machine</p>
+                            <template x-if="roleModal.loadingMachines">
+                                <p class="text-sm text-gray-400 animate-pulse">Loading machines…</p>
+                            </template>
+                            <template x-if="!roleModal.loadingMachines">
+                                <select x-model="roleModal.machineId"
+                                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400">
+                                    <option value="">— No machine —</option>
+                                    <template x-for="m in roleModal.machines" :key="m.id">
+                                        <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
+                                    </template>
+                                </select>
+                            </template>
+                        </div>
+                    </template>
+
+                    {{-- Error --}}
+                    <template x-if="roleModal.error">
+                        <p class="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700" x-text="roleModal.error"></p>
+                    </template>
                 </div>
-            </template>
 
+                {{-- Footer --}}
+                <div class="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                    <button @click="roleModal.open = false"
+                            class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
+                    <button @click="submitRoleAssign()"
+                            :disabled="roleModal.saving || roleModal.loadingRoles"
+                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors">
+                        <svg x-show="roleModal.saving" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span x-text="roleModal.saving ? 'Saving…' : 'Save Role'"></span>
+                    </button>
+                </div>
+
+            </div>
         </div>
+    </template>
 
-        {{-- Drawer footer --}}
-        <div class="shrink-0 border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3">
-            <button @click="permDrawer.open = false"
-                    class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
-                Cancel
-            </button>
-            <button @click="savePermissions()"
-                    :disabled="permDrawer.saving || permDrawer.loading"
-                    class="rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
-                <span x-show="!permDrawer.saving">Save Changes</span>
-                <span x-show="permDrawer.saving">Saving…</span>
-            </button>
+    {{-- PERMISSIONS MODAL --}}
+    <template x-if="permDrawer.open">
+        <div class="fixed inset-0 z-50 bg-black/50"
+             style="display:flex;align-items:flex-start;justify-content:center;padding:2.5rem 1rem 1rem"
+             @click.self="permDrawer.open = false"
+             @keydown.escape.window="permDrawer.open = false">
+
+            <div style="background:#fff;border-radius:1rem;box-shadow:0 25px 50px rgba(0,0,0,.25);width:100%;max-width:680px;display:flex;flex-direction:column;max-height:88vh"
+                 @click.stop>
+
+                {{-- Header --}}
+                <div style="display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #e5e7eb;padding:1rem 1.5rem;flex-shrink:0">
+                    <div style="width:2.5rem;height:2.5rem;border-radius:9999px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-weight:700;color:#6d28d9;font-size:0.875rem;flex-shrink:0"
+                         x-text="permDrawer.user?.name?.charAt(0)?.toUpperCase()"></div>
+                    <div style="min-width:0;flex:1">
+                        <p style="font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="permDrawer.user?.name"></p>
+                        <p style="font-size:0.75rem;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="permDrawer.user?.email"></p>
+                    </div>
+                    <template x-if="permDrawer.user?.role_label">
+                        <span style="background:#eef2ff;color:#4338ca;border-radius:9999px;padding:0.125rem 0.625rem;font-size:0.75rem;font-weight:500;flex-shrink:0"
+                              x-text="permDrawer.user?.role_label"></span>
+                    </template>
+                    <button @click="permDrawer.open = false"
+                            style="margin-left:0.25rem;border-radius:0.5rem;padding:0.375rem;color:#9ca3af;cursor:pointer;background:none;border:none;line-height:1;flex-shrink:0"
+                            onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                        <svg style="width:1.25rem;height:1.25rem" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                {{-- Loading --}}
+                <template x-if="permDrawer.loading">
+                    <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:3rem">
+                        <p style="font-size:0.875rem;color:#9ca3af">Loading permissions…</p>
+                    </div>
+                </template>
+
+                {{-- Scrollable content --}}
+                <template x-if="!permDrawer.loading">
+                    <div style="flex:1;overflow-y:auto;min-height:0;padding:1.25rem 1.5rem">
+                        <div style="display:flex;flex-direction:column;gap:1.5rem">
+
+                            {{-- Role Assignment --}}
+                            <div>
+                                <p style="margin-bottom:0.5rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280">Assign Role</p>
+                                <template x-if="permDrawer.loadingRoles">
+                                    <p style="font-size:0.875rem;color:#9ca3af">Loading roles…</p>
+                                </template>
+                                <template x-if="!permDrawer.loadingRoles">
+                                    <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
+                                        <template x-for="r in permDrawer.assignableRoles" :key="r.value">
+                                            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;border-radius:0.5rem;border:1px solid;padding:0.375rem 0.75rem;font-size:0.75rem;font-weight:500;transition:all .15s"
+                                                   :style="permDrawer.selectedRole === r.value
+                                                       ? 'border-color:#818cf8;background:#eef2ff;color:#4338ca'
+                                                       : 'border-color:#e5e7eb;color:#4b5563'">
+                                                <input type="radio" :value="r.value" x-model="permDrawer.selectedRole" style="accent-color:#4f46e5">
+                                                <span x-text="r.label"></span>
+                                            </label>
+                                        </template>
+                                        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;border-radius:0.5rem;border:1px solid;padding:0.375rem 0.75rem;font-size:0.75rem;font-weight:500;transition:all .15s"
+                                               :style="permDrawer.selectedRole === ''
+                                                   ? 'border-color:#fca5a5;background:#fef2f2;color:#dc2626'
+                                                   : 'border-color:#e5e7eb;color:#9ca3af'">
+                                            <input type="radio" value="" x-model="permDrawer.selectedRole" style="accent-color:#ef4444">
+                                            <span>No Role</span>
+                                        </label>
+                                    </div>
+                                </template>
+                            </div>
+
+                            {{-- Machine Assignment (operator / viewer only) --}}
+                            <template x-if="permDrawer.selectedRole === 'operator' || permDrawer.selectedRole === 'viewer'">
+                                <div>
+                                    <p style="margin-bottom:0.5rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280">Machine Assignment</p>
+                                    <template x-if="permDrawer.loadingMachines">
+                                        <p style="font-size:0.875rem;color:#9ca3af">Loading machines…</p>
+                                    </template>
+                                    <template x-if="!permDrawer.loadingMachines">
+                                        <select x-model="permDrawer.machineId"
+                                                style="width:100%;border-radius:0.5rem;border:1px solid #d1d5db;padding:0.5rem 0.75rem;font-size:0.875rem;outline:none">
+                                            <option value="">— No machine assigned —</option>
+                                            <template x-for="m in permDrawer.machines" :key="m.id">
+                                                <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
+                                            </template>
+                                        </select>
+                                    </template>
+                                </div>
+                            </template>
+
+                            {{-- Legend --}}
+                            <div style="display:flex;align-items:center;gap:1.25rem;font-size:0.75rem;color:#6b7280">
+                                <span style="display:flex;align-items:center;gap:0.375rem">
+                                    <span style="display:inline-block;width:0.875rem;height:0.875rem;border-radius:0.25rem;border:2px solid #d1d5db;background:#f3f4f6"></span>
+                                    Via role (read-only)
+                                </span>
+                                <span style="display:flex;align-items:center;gap:0.375rem">
+                                    <span style="display:inline-block;width:0.875rem;height:0.875rem;border-radius:0.25rem;border:2px solid #7c3aed;background:#7c3aed"></span>
+                                    Direct grant
+                                </span>
+                            </div>
+
+                            {{-- Permission groups --}}
+                            <template x-for="group in permGroups" :key="group.label">
+                                <div>
+                                    <p style="margin-bottom:0.5rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280"
+                                       x-text="group.label"></p>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.125rem 1rem">
+                                        <template x-for="perm in group.permissions" :key="perm.value">
+                                            <label style="display:flex;align-items:center;gap:0.5rem;border-radius:0.375rem;padding:0.25rem 0.5rem;transition:background .1s"
+                                                   :style="isRolePerm(perm.value) ? 'opacity:.6;cursor:not-allowed' : 'cursor:pointer'"
+                                                   onmouseover="if(!this.querySelector('input').disabled) this.style.background='#f5f3ff'"
+                                                   onmouseout="this.style.background=''">
+                                                <input type="checkbox"
+                                                       :checked="isRolePerm(perm.value) || isDirectPerm(perm.value)"
+                                                       :disabled="isRolePerm(perm.value)"
+                                                       @change="!isRolePerm(perm.value) && togglePerm(perm.value)"
+                                                       style="width:0.875rem;height:0.875rem;border-radius:0.25rem;accent-color:#7c3aed;flex-shrink:0">
+                                                <span style="font-size:0.75rem;color:#374151;line-height:1.25" x-text="perm.label"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                        </div>
+                    </div>
+                </template>
+
+                {{-- Footer — always visible --}}
+                <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid #e5e7eb;padding:1rem 1.5rem;flex-shrink:0">
+                    <p style="font-size:0.75rem;color:#9ca3af">Role + permissions saved together.</p>
+                    <div style="display:flex;align-items:center;gap:0.75rem">
+                        <button @click="permDrawer.open = false"
+                                style="border-radius:0.5rem;padding:0.5rem 1rem;font-size:0.875rem;color:#4b5563;cursor:pointer;background:none;border:1px solid #e5e7eb"
+                                onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'">
+                            Cancel
+                        </button>
+                        <button @click="savePermissions()"
+                                :disabled="permDrawer.saving"
+                                style="display:inline-flex;align-items:center;gap:0.5rem;border-radius:0.5rem;padding:0.5rem 1.25rem;font-size:0.875rem;font-weight:500;color:#fff;background:#7c3aed;border:none;cursor:pointer;transition:background .15s"
+                                onmouseover="if(!this.disabled) this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'"
+                                :style="permDrawer.saving ? 'opacity:.6;cursor:not-allowed' : ''">
+                            <svg x-show="permDrawer.saving" style="width:1rem;height:1rem;animation:spin 1s linear infinite" fill="none" viewBox="0 0 24 24">
+                                <circle style="opacity:.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path style="opacity:.75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            <span x-text="permDrawer.saving ? 'Saving…' : 'Save Changes'">Save Changes</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
         </div>
-
-    </div>{{-- end permission drawer --}}
+    </template>{{-- end permissions modal --}}
 
 </div>{{-- end x-data --}}
 
 @endsection
 
 @push('scripts')
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 <script>
 function userManager(apiToken, isSuperAdmin, factories, permissionGroups) {
     return {
@@ -498,6 +629,12 @@ function userManager(apiToken, isSuperAdmin, factories, permissionGroups) {
         editModal: {
             open: false, saving: false, errors: {}, user: null,
             form: { name: '', email: '', password: '', factory_id: '', is_active: true },
+        },
+        roleModal: {
+            open: false, saving: false, user: null, error: null,
+            assignableRoles: [], loadingRoles: false,
+            selectedRole: '',
+            machines: [], loadingMachines: false, machineId: '',
         },
 machineModal: {
             open: false, saving: false, user: null,
@@ -634,6 +771,115 @@ machineModal: {
                 }
             } catch (e) {
                 this.setFlash('error', 'Network error. Please retry.');
+            }
+        },
+
+        async openRoleModal(user) {
+            this.roleModal = {
+                open: true, saving: false, user,
+                assignableRoles: [], loadingRoles: true,
+                selectedRole: user.role ?? '',
+                machines: [], loadingMachines: false, machineId: user.machine_id ?? '',
+                error: null,
+            };
+            try {
+                const res  = await fetch(`/admin/users/${user.id}`, { headers: this.headers });
+                const data = await res.json();
+                this.roleModal.assignableRoles = data.data?.assignable_roles ?? [];
+            } catch (e) {
+                this.roleModal.error = 'Could not load assignable roles.';
+            } finally {
+                this.roleModal.loadingRoles = false;
+            }
+            // Auto-load machines if current role is operator/viewer
+            if (this.roleModal.selectedRole === 'operator' || this.roleModal.selectedRole === 'viewer') {
+                await this.loadRoleModalMachines(user);
+            }
+        },
+
+        async onRoleModalRoleChange() {
+            const role = this.roleModal.selectedRole;
+            if (role === 'operator' || role === 'viewer') {
+                await this.loadRoleModalMachines(this.roleModal.user);
+            } else {
+                this.roleModal.machines = [];
+            }
+        },
+
+        async loadRoleModalMachines(user) {
+            this.roleModal.loadingMachines = true;
+            try {
+                const factoryParam = user.factory_id ? `&factory_id=${user.factory_id}` : '';
+                const res  = await fetch(`/api/v1/machines?per_page=200&status=active${factoryParam}`, { headers: this.headers });
+                const data = await res.json();
+                this.roleModal.machines = data.data ?? [];
+            } catch (e) { /* non-fatal */ }
+            finally { this.roleModal.loadingMachines = false; }
+        },
+
+        async submitRoleAssign() {
+            this.roleModal.saving = true;
+            this.roleModal.error  = null;
+            try {
+                const u        = this.roleModal.user;
+                const newRole  = this.roleModal.selectedRole;
+                const origRole = u.role ?? '';
+
+                // 1. Role assignment / revocation
+                if (newRole !== origRole) {
+                    if (newRole) {
+                        const r = await fetch(`/admin/users/${u.id}/assign-role`, {
+                            method:  'POST',
+                            headers: this.headers,
+                            body:    JSON.stringify({ role: newRole }),
+                        });
+                        if (!r.ok) {
+                            const d = await r.json();
+                            this.roleModal.error = d.message ?? 'Failed to assign role.';
+                            return;
+                        }
+                    } else {
+                        const r = await fetch(`/admin/users/${u.id}/revoke-role`, {
+                            method: 'DELETE', headers: this.headers,
+                        });
+                        if (!r.ok) {
+                            const d = await r.json();
+                            this.roleModal.error = d.message ?? 'Failed to revoke role.';
+                            return;
+                        }
+                    }
+                }
+
+                // 2. Machine assignment for operator/viewer
+                if (newRole === 'operator' || newRole === 'viewer') {
+                    await fetch(`/admin/users/${u.id}/assign-machine`, {
+                        method:  'POST',
+                        headers: this.headers,
+                        body:    JSON.stringify({ machine_id: this.roleModal.machineId || null }),
+                    });
+                }
+
+                // 3. Update user row in-place (no full reload needed)
+                const idx = this.users.findIndex(uu => uu.id === u.id);
+                if (idx !== -1) {
+                    const roleLabel = newRole
+                        ? (this.roleModal.assignableRoles.find(r => r.value === newRole)?.label ?? newRole)
+                        : null;
+                    this.users[idx].role       = newRole || null;
+                    this.users[idx].role_label = roleLabel;
+                    if (newRole === 'operator' || newRole === 'viewer') {
+                        this.users[idx].machine_id = this.roleModal.machineId || null;
+                    }
+                }
+
+                this.roleModal.open = false;
+                this.setFlash('success', newRole
+                    ? `Role assigned to ${u.name}.`
+                    : `Role revoked from ${u.name}.`);
+            } catch (e) {
+                this.roleModal.error = 'Network error. Please retry.';
+            } finally {
+                this.roleModal.saving = false;
             }
         },
 
@@ -779,6 +1025,16 @@ machineModal: {
                     this.setFlash('error', data.message ?? 'Failed to save permissions.');
                 } else {
                     this.setFlash('success', 'User updated successfully.');
+                    // Update role badge in-place
+                    const idx = this.users.findIndex(uu => uu.id === u.id);
+                    if (idx !== -1) {
+                        const newRole  = this.permDrawer.selectedRole;
+                        const roleLabel = newRole
+                            ? (this.permDrawer.assignableRoles.find(r => r.value === newRole)?.label ?? newRole)
+                            : null;
+                        this.users[idx].role       = newRole || null;
+                        this.users[idx].role_label = roleLabel;
+                    }
                     this.permDrawer.open = false;
                     this.loadUsers(this.pagination.current_page);
                 }

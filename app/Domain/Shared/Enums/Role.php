@@ -182,6 +182,17 @@ enum Role: string
                 Permission::UPDATE_SHIFT,
                 Permission::DELETE_SHIFT,
 
+                Permission::VIEW_ANY_WORK_ORDER,
+                Permission::VIEW_WORK_ORDER,
+                Permission::CREATE_WORK_ORDER,
+                Permission::UPDATE_WORK_ORDER,
+                Permission::DELETE_WORK_ORDER,
+                Permission::CONFIRM_WORK_ORDER,
+                Permission::RELEASE_WORK_ORDER,
+
+                Permission::VIEW_IOT_DASHBOARD,
+                Permission::EXPORT_IOT_DATA,
+
                 Permission::VIEW_OEE_REPORT,
                 Permission::VIEW_PRODUCTION_REPORT,
                 Permission::VIEW_DOWNTIME_REPORT,
@@ -235,6 +246,16 @@ enum Role: string
                 Permission::CREATE_SHIFT,
                 Permission::UPDATE_SHIFT,
 
+                Permission::VIEW_ANY_WORK_ORDER,
+                Permission::VIEW_WORK_ORDER,
+                Permission::CREATE_WORK_ORDER,
+                Permission::UPDATE_WORK_ORDER,
+                Permission::CONFIRM_WORK_ORDER,
+                Permission::RELEASE_WORK_ORDER,
+
+                Permission::VIEW_IOT_DASHBOARD,
+                Permission::EXPORT_IOT_DATA,
+
                 Permission::VIEW_OEE_REPORT,
                 Permission::VIEW_PRODUCTION_REPORT,
                 Permission::VIEW_DOWNTIME_REPORT,
@@ -275,6 +296,11 @@ enum Role: string
                 Permission::VIEW_CUSTOMER,
 
                 Permission::VIEW_ANY_SHIFT,
+
+                Permission::VIEW_ANY_WORK_ORDER,
+                Permission::VIEW_WORK_ORDER,
+
+                Permission::VIEW_IOT_DASHBOARD,
 
                 Permission::VIEW_OEE_REPORT,
                 Permission::VIEW_PRODUCTION_REPORT,
@@ -330,6 +356,8 @@ enum Role: string
                 Permission::VIEW_CUSTOMER,
 
                 Permission::VIEW_ANY_SHIFT,
+
+                Permission::VIEW_IOT_DASHBOARD,
 
                 Permission::VIEW_OEE_REPORT,
                 Permission::VIEW_PRODUCTION_REPORT,

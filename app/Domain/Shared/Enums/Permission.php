@@ -97,6 +97,19 @@ enum Permission: string
     case UPDATE_SHIFT               = 'update.shift';
     case DELETE_SHIFT               = 'delete.shift';
 
+    // ── Work Order Management ─────────────────────────────────
+    case VIEW_ANY_WORK_ORDER        = 'view-any.work-order';
+    case VIEW_WORK_ORDER            = 'view.work-order';
+    case CREATE_WORK_ORDER          = 'create.work-order';
+    case UPDATE_WORK_ORDER          = 'update.work-order';
+    case DELETE_WORK_ORDER          = 'delete.work-order';
+    case CONFIRM_WORK_ORDER         = 'confirm.work-order';
+    case RELEASE_WORK_ORDER         = 'release.work-order';
+
+    // ── IoT Dashboard ─────────────────────────────────────────
+    case VIEW_IOT_DASHBOARD         = 'view.iot-dashboard';
+    case EXPORT_IOT_DATA            = 'export.iot-data';
+
     // ── Analytics & Reports ───────────────────────────────────
     case VIEW_OEE_REPORT            = 'view.oee-report';
     case VIEW_PRODUCTION_REPORT     = 'view.production-report';
@@ -186,6 +199,17 @@ enum Permission: string
             self::UPDATE_SHIFT               => 'Update Shift',
             self::DELETE_SHIFT               => 'Delete Shift',
 
+            self::VIEW_ANY_WORK_ORDER        => 'List Work Orders',
+            self::VIEW_WORK_ORDER            => 'View Work Order',
+            self::CREATE_WORK_ORDER          => 'Create Work Order',
+            self::UPDATE_WORK_ORDER          => 'Update Work Order',
+            self::DELETE_WORK_ORDER          => 'Delete Work Order',
+            self::CONFIRM_WORK_ORDER         => 'Confirm Work Order',
+            self::RELEASE_WORK_ORDER         => 'Release Work Order to Shop Floor',
+
+            self::VIEW_IOT_DASHBOARD         => 'View IoT Dashboard',
+            self::EXPORT_IOT_DATA            => 'Export IoT Data (CSV)',
+
             self::VIEW_OEE_REPORT            => 'View OEE Report',
             self::VIEW_PRODUCTION_REPORT     => 'View Production Report',
             self::VIEW_DOWNTIME_REPORT       => 'View Downtime Report',
@@ -215,6 +239,9 @@ enum Permission: string
             str_ends_with($this->value, '.process-master') => 'parts_and_processes',
             str_ends_with($this->value, '.customer') => 'customer_management',
             str_ends_with($this->value, '.shift') => 'shift_management',
+            str_ends_with($this->value, '.iot-dashboard') ||
+            str_ends_with($this->value, '.iot-data') => 'iot_dashboard',
+            str_ends_with($this->value, '.work-order') => 'work_order_management',
             default => 'analytics_reports',
         };
     }
@@ -245,6 +272,8 @@ enum Permission: string
             'parts_and_processes'=> ['label' => 'Parts & Processes',     'permissions' => []],
             'customer_management'=> ['label' => 'Customer Management',   'permissions' => []],
             'shift_management'   => ['label' => 'Shift Management',      'permissions' => []],
+            'work_order_management' => ['label' => 'Work Order Management', 'permissions' => []],
+            'iot_dashboard'      => ['label' => 'IoT Dashboard',         'permissions' => []],
             'analytics_reports'  => ['label' => 'Analytics & Reports',   'permissions' => []],
         ];
 

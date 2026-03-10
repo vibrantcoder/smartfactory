@@ -10,6 +10,7 @@ use App\Domain\Production\Models\Customer;
 use App\Domain\Production\Models\Part;
 use App\Domain\Production\Models\ProcessMaster;
 use App\Domain\Production\Models\ProductionPlan;
+use App\Domain\Production\Models\WorkOrder;
 use App\Domain\Shared\Enums\Role as RoleEnum;
 use App\Models\User;
 use App\Policies\CustomerPolicy;
@@ -19,6 +20,7 @@ use App\Policies\PartPolicy;
 use App\Policies\ProcessMasterPolicy;
 use App\Policies\ProductionPlanPolicy;
 use App\Policies\UserPolicy;
+use App\Policies\WorkOrderPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Permission\Models\Role;
@@ -61,6 +63,7 @@ class AppServiceProvider extends ServiceProvider
         Part::class           => PartPolicy::class,
         ProcessMaster::class  => ProcessMasterPolicy::class,
         ProductionPlan::class => ProductionPlanPolicy::class,
+            WorkOrder::class      => WorkOrderPolicy::class,
         Role::class           => \App\Policies\RolePolicy::class,
         User::class           => UserPolicy::class,
     ];

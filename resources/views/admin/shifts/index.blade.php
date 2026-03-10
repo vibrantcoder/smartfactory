@@ -315,21 +315,29 @@
 
                 {{-- Break Time --}}
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Break Time (minutes)</label>
-                    <div class="flex items-center gap-3">
-                        <input
-                            type="number"
-                            x-model.number="form.break_min"
-                            min="0"
-                            max="480"
-                            step="5"
-                            placeholder="0"
-                            class="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
-                        >
-                        <span class="text-xs text-gray-500">
-                            e.g. 30 for a 30-min lunch break. Subtracted from OEE planned time.
-                        </span>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Break Time <span class="text-xs font-normal text-gray-400">(optional — subtracted from OEE planned time)</span></label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Break Start</label>
+                            <input
+                                type="time"
+                                x-model="form.break_start"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Break End</label>
+                            <input
+                                type="time"
+                                x-model="form.break_end"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                            >
+                        </div>
                     </div>
+                    <template x-if="calculatedBreakMin > 0">
+                        <p class="mt-1.5 text-xs text-orange-600 font-medium"
+                           x-text="'Break duration: ' + calculatedBreakMin + ' min'"></p>
+                    </template>
                 </div>
 
                 {{-- Duration preview --}}
@@ -345,18 +353,18 @@
                         </div>
 
                         {{-- Break row --}}
-                        <div class="flex items-center justify-between" x-show="form.break_min > 0">
+                        <div class="flex items-center justify-between" x-show="calculatedBreakMin > 0">
                             <span class="text-xs text-orange-600 flex items-center gap-1">
                                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
                                 </svg>
                                 Break Time
                             </span>
-                            <span class="font-semibold text-orange-600" x-text="'− ' + form.break_min + ' min'"></span>
+                            <span class="font-semibold text-orange-600" x-text="'− ' + calculatedBreakMin + ' min'"></span>
                         </div>
 
                         {{-- Divider --}}
-                        <div class="border-t" :class="crossesMidnight ? 'border-amber-200' : 'border-indigo-200'" x-show="form.break_min > 0"></div>
+                        <div class="border-t" :class="crossesMidnight ? 'border-amber-200' : 'border-indigo-200'" x-show="calculatedBreakMin > 0"></div>
 
                         {{-- OEE Planned --}}
                         <div class="flex items-center justify-between">
@@ -364,7 +372,7 @@
                                 OEE Planned Time
                             </span>
                             <span class="font-bold text-base" :class="crossesMidnight ? 'text-amber-800' : 'text-indigo-800'"
-                                  x-text="fmtDuration(Math.max(0, calculatedDuration - (form.break_min || 0))) + ' (' + Math.max(0, calculatedDuration - (form.break_min || 0)) + ' min)'">
+                                  x-text="fmtDuration(Math.max(0, calculatedDuration - calculatedBreakMin)) + ' (' + Math.max(0, calculatedDuration - calculatedBreakMin) + ' min)'">
                             </span>
                         </div>
 
@@ -449,14 +457,24 @@ function shiftManager(initialShifts, factoryId, factories) {
         modalError:  null,
 
         form: {
-            name:       '',
-            start_time: '',
-            end_time:   '',
-            break_min:  0,
-            is_active:  true,
+            name:        '',
+            start_time:  '',
+            end_time:    '',
+            break_start: '',
+            break_end:   '',
+            is_active:   true,
         },
 
         // ── Computed ─────────────────────────────────────────
+
+        get calculatedBreakMin() {
+            if (!this.form.break_start || !this.form.break_end) return 0;
+            const [bsh, bsm] = this.form.break_start.split(':').map(Number);
+            const [beh, bem] = this.form.break_end.split(':').map(Number);
+            const startMin = bsh * 60 + bsm;
+            const endMin   = beh * 60 + bem;
+            return endMin > startMin ? endMin - startMin : 0;
+        },
 
         get calculatedDuration() {
             if (!this.form.start_time || !this.form.end_time) return 0;
@@ -499,7 +517,7 @@ function shiftManager(initialShifts, factoryId, factories) {
         openCreate() {
             this.editShift  = null;
             this.modalError = null;
-            this.form = { name: '', start_time: '08:00', end_time: '20:00', break_min: 0, is_active: true };
+            this.form = { name: '', start_time: '08:00', end_time: '20:00', break_start: '', break_end: '', is_active: true };
             this.showModal = true;
         },
 
@@ -507,11 +525,12 @@ function shiftManager(initialShifts, factoryId, factories) {
             this.editShift  = shift;
             this.modalError = null;
             this.form = {
-                name:       shift.name,
-                start_time: shift.start_time.slice(0, 5),
-                end_time:   shift.end_time.slice(0, 5),
-                break_min:  shift.break_min || 0,
-                is_active:  shift.is_active,
+                name:        shift.name,
+                start_time:  shift.start_time.slice(0, 5),
+                end_time:    shift.end_time.slice(0, 5),
+                break_start: shift.break_start ? shift.break_start.slice(0, 5) : '',
+                break_end:   shift.break_end   ? shift.break_end.slice(0, 5)   : '',
+                is_active:   shift.is_active,
             };
             this.showModal = true;
         },

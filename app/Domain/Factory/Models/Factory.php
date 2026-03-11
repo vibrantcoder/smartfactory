@@ -41,13 +41,15 @@ class Factory extends BaseModel
         'location',
         'timezone',
         'status',
+        'week_off_days',
     ];
 
     protected function casts(): array
     {
         return [
             ...parent::casts(),
-            'status' => 'string',
+            'status'       => 'string',
+            'week_off_days' => 'array',
         ];
     }
 
@@ -83,6 +85,11 @@ class Factory extends BaseModel
     public function shifts(): HasMany
     {
         return $this->hasMany(\App\Domain\Production\Models\Shift::class, 'factory_id');
+    }
+
+    public function holidays(): HasMany
+    {
+        return $this->hasMany(FactoryHoliday::class, 'factory_id')->orderBy('holiday_date');
     }
 
     // ── Accessors ─────────────────────────────────────────────

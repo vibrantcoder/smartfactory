@@ -21,30 +21,54 @@ class ProductionPlanController extends Controller
     {
         $user = $request->user();
 
-        $machines = Machine::where('status', 'active')
-            ->ordered()
-            ->get(['id', 'name', 'code', 'type']);
+        ['factoryId' => $factoryId, 'factories' => $factories] = $this->resolveFactories($user);
 
-        $shifts = Shift::where('is_active', true)
+        $machines = Machine::withoutGlobalScopes()
+            ->where('status', 'active')
+            ->when($factoryId, fn ($q) => $q->where('factory_id', $factoryId))
+            ->ordered()
+            ->get(['id', 'name', 'code', 'type', 'factory_id']);
+
+        $shifts = Shift::withoutGlobalScopes()
+            ->where('is_active', true)
+            ->when($factoryId, fn ($q) => $q->where('factory_id', $factoryId))
             ->orderBy('start_time')
-            ->get(['id', 'name', 'start_time', 'end_time', 'duration_min']);
+            ->get(['id', 'name', 'start_time', 'end_time', 'duration_min', 'factory_id']);
 
         $parts = Part::where('status', 'active')
+            ->when($factoryId, fn ($q) => $q->where('factory_id', $factoryId))
             ->with(['processes' => fn ($q) => $q->orderBy('sequence_order')->with('processMaster:id,name,standard_time')])
             ->orderBy('part_number')
-            ->get(['id', 'name', 'part_number', 'cycle_time_std', 'total_cycle_time']);
+            ->get(['id', 'name', 'part_number', 'cycle_time_std', 'total_cycle_time', 'factory_id']);
 
-        $factories = $user->factory_id === null
-            ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])
-            : collect();
+        // Load week-off days and holidays for the current factory
+        $weekOffDays = [];
+        $holidays    = [];
+        if ($factoryId) {
+            $factory = Factory::with('holidays')->find($factoryId);
+            if ($factory) {
+                $weekOffDays = $factory->week_off_days ?? [];
+                $holidays    = $factory->holidays
+                    ->map(fn ($h) => [
+                        'date' => $h->holiday_date instanceof \Carbon\Carbon
+                            ? $h->holiday_date->format('Y-m-d')
+                            : (string) $h->holiday_date,
+                        'name' => $h->name,
+                    ])
+                    ->values()
+                    ->all();
+            }
+        }
 
         return view('admin.production.plans.index', [
-            'apiToken'  => session('api_token'),
-            'factoryId' => $user->factory_id,
-            'factories' => $factories,
-            'machines'  => $machines,
-            'shifts'    => $shifts,
-            'parts'     => $parts,
+            'apiToken'    => session('api_token'),
+            'factoryId'   => $factoryId,
+            'factories'   => $factories,
+            'machines'    => $machines,
+            'shifts'      => $shifts,
+            'parts'       => $parts,
+            'weekOffDays' => $weekOffDays,
+            'holidays'    => $holidays,
         ]);
     }
 }

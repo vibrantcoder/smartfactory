@@ -30,6 +30,15 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
             [\App\Http\Controllers\Api\V1\Factory\FactoryController::class, 'settings']);
         Route::put('factories/{factory}/settings',
             [\App\Http\Controllers\Api\V1\Factory\FactoryController::class, 'updateSettings']);
+        // Week-off & Holidays
+        Route::patch('factories/{factory}/week-off',
+            [\App\Http\Controllers\Api\V1\Factory\FactoryController::class, 'updateWeekOff']);
+        Route::get('factories/{factory}/holidays',
+            [\App\Http\Controllers\Api\V1\Factory\FactoryController::class, 'holidays']);
+        Route::post('factories/{factory}/holidays',
+            [\App\Http\Controllers\Api\V1\Factory\FactoryController::class, 'addHoliday']);
+        Route::delete('factories/{factory}/holidays/{holiday}',
+            [\App\Http\Controllers\Api\V1\Factory\FactoryController::class, 'removeHoliday']);
 
         // ── Machine ───────────────────────────────────────────────────────
         Route::apiResource('machines', \App\Http\Controllers\Api\V1\Machine\MachineController::class);
@@ -59,6 +68,20 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
 
         // ── Production Plans ──────────────────────────────────────────────
         Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\Production\WorkOrderController::class);
+        Route::get('work-orders/{wo}/scheduled-qty',
+            [\App\Http\Controllers\Api\V1\Production\WorkOrderController::class, 'scheduledQty'])
+            ->name('work-orders.scheduled-qty');
+        Route::post('work-orders/{wo}/schedule',
+            [\App\Http\Controllers\Api\V1\Production\WorkOrderController::class, 'schedule'])
+            ->name('work-orders.schedule');
+
+        Route::get('machine-load',
+            [\App\Http\Controllers\Api\V1\Production\MachineLoadController::class, 'index'])
+            ->name('machine-load');
+
+        Route::get('machine-availability',
+            [\App\Http\Controllers\Api\V1\Production\MachineLoadController::class, 'checkAvailability'])
+            ->name('machine-availability');
 
         Route::apiResource('production-plans', \App\Http\Controllers\Api\V1\Production\ProductionPlanController::class);
         Route::get('production-plans/{plan}/analysis',

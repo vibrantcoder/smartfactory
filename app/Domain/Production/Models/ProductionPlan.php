@@ -48,6 +48,7 @@ class ProductionPlan extends BaseModel
         'machine_id',
         'part_id',
         'part_process_id',
+        'work_order_id',
         'shift_id',
         'planned_date',
         'planned_qty',
@@ -85,6 +86,11 @@ class ProductionPlan extends BaseModel
     public function shift(): BelongsTo
     {
         return $this->belongsTo(Shift::class, 'shift_id');
+    }
+
+    public function workOrder(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrder::class, 'work_order_id');
     }
 
     public function actuals(): HasMany

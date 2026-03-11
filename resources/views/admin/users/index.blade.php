@@ -490,53 +490,6 @@
                     <div style="flex:1;overflow-y:auto;min-height:0;padding:1.25rem 1.5rem">
                         <div style="display:flex;flex-direction:column;gap:1.5rem">
 
-                            {{-- Role Assignment --}}
-                            <div>
-                                <p style="margin-bottom:0.5rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280">Assign Role</p>
-                                <template x-if="permDrawer.loadingRoles">
-                                    <p style="font-size:0.875rem;color:#9ca3af">Loading roles…</p>
-                                </template>
-                                <template x-if="!permDrawer.loadingRoles">
-                                    <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
-                                        <template x-for="r in permDrawer.assignableRoles" :key="r.value">
-                                            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;border-radius:0.5rem;border:1px solid;padding:0.375rem 0.75rem;font-size:0.75rem;font-weight:500;transition:all .15s"
-                                                   :style="permDrawer.selectedRole === r.value
-                                                       ? 'border-color:#818cf8;background:#eef2ff;color:#4338ca'
-                                                       : 'border-color:#e5e7eb;color:#4b5563'">
-                                                <input type="radio" :value="r.value" x-model="permDrawer.selectedRole" style="accent-color:#4f46e5">
-                                                <span x-text="r.label"></span>
-                                            </label>
-                                        </template>
-                                        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;border-radius:0.5rem;border:1px solid;padding:0.375rem 0.75rem;font-size:0.75rem;font-weight:500;transition:all .15s"
-                                               :style="permDrawer.selectedRole === ''
-                                                   ? 'border-color:#fca5a5;background:#fef2f2;color:#dc2626'
-                                                   : 'border-color:#e5e7eb;color:#9ca3af'">
-                                            <input type="radio" value="" x-model="permDrawer.selectedRole" style="accent-color:#ef4444">
-                                            <span>No Role</span>
-                                        </label>
-                                    </div>
-                                </template>
-                            </div>
-
-                            {{-- Machine Assignment (operator / viewer only) --}}
-                            <template x-if="permDrawer.selectedRole === 'operator' || permDrawer.selectedRole === 'viewer'">
-                                <div>
-                                    <p style="margin-bottom:0.5rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280">Machine Assignment</p>
-                                    <template x-if="permDrawer.loadingMachines">
-                                        <p style="font-size:0.875rem;color:#9ca3af">Loading machines…</p>
-                                    </template>
-                                    <template x-if="!permDrawer.loadingMachines">
-                                        <select x-model="permDrawer.machineId"
-                                                style="width:100%;border-radius:0.5rem;border:1px solid #d1d5db;padding:0.5rem 0.75rem;font-size:0.875rem;outline:none">
-                                            <option value="">— No machine assigned —</option>
-                                            <template x-for="m in permDrawer.machines" :key="m.id">
-                                                <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
-                                            </template>
-                                        </select>
-                                    </template>
-                                </div>
-                            </template>
-
                             {{-- Legend --}}
                             <div style="display:flex;align-items:center;gap:1.25rem;font-size:0.75rem;color:#6b7280">
                                 <span style="display:flex;align-items:center;gap:0.375rem">
@@ -578,7 +531,7 @@
 
                 {{-- Footer — always visible --}}
                 <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid #e5e7eb;padding:1rem 1.5rem;flex-shrink:0">
-                    <p style="font-size:0.75rem;color:#9ca3af">Role + permissions saved together.</p>
+                    <p style="font-size:0.75rem;color:#9ca3af">Direct permissions override role defaults.</p>
                     <div style="display:flex;align-items:center;gap:0.75rem">
                         <button @click="permDrawer.open = false"
                                 style="border-radius:0.5rem;padding:0.5rem 1rem;font-size:0.875rem;color:#4b5563;cursor:pointer;background:none;border:1px solid #e5e7eb"
@@ -643,8 +596,6 @@ machineModal: {
         permDrawer: {
             open: false, loading: false, saving: false, user: null,
             rolePerms: [], directPerms: [],
-            machineId: '', machines: [], loadingMachines: false,
-            selectedRole: '', assignableRoles: [], loadingRoles: false,
         },
 
         init() { this.loadUsers(1); },
@@ -932,40 +883,18 @@ machineModal: {
             this.permDrawer = {
                 open: true, loading: true, saving: false, user,
                 rolePerms: [], directPerms: [],
-                machineId: user.machine_id ?? '',
-                machines: [], loadingMachines: false,
-                selectedRole: user.role ?? '', assignableRoles: [], loadingRoles: true,
             };
-            // Load permissions and assignable roles in parallel
             try {
-                const [permRes, userRes] = await Promise.all([
-                    fetch(`/admin/users/${user.id}/permissions`, { headers: this.headers }),
-                    fetch(`/admin/users/${user.id}`, { headers: this.headers }),
-                ]);
-                const permData = await permRes.json();
-                const userData = await userRes.json();
-                this.permDrawer.rolePerms       = permData.role_permissions   ?? [];
-                this.permDrawer.directPerms     = permData.direct_permissions ?? [];
-                this.permDrawer.assignableRoles = userData.data?.assignable_roles ?? [];
+                const res      = await fetch(`/admin/users/${user.id}/permissions`, { headers: this.headers });
+                const permData = await res.json();
+                this.permDrawer.rolePerms   = permData.role_permissions   ?? [];
+                this.permDrawer.directPerms = permData.direct_permissions ?? [];
             } catch (e) {
-                this.setFlash('error', 'Could not load user data.');
+                this.setFlash('error', 'Could not load user permissions.');
                 this.permDrawer.open = false;
                 return;
             } finally {
-                this.permDrawer.loading     = false;
-                this.permDrawer.loadingRoles = false;
-            }
-            // Load machines if user is operator/viewer
-            const role = this.permDrawer.selectedRole;
-            if (role === 'operator' || role === 'viewer') {
-                this.permDrawer.loadingMachines = true;
-                try {
-                    const factoryParam = user.factory_id ? `&factory_id=${user.factory_id}` : '';
-                    const res  = await fetch(`/api/v1/machines?per_page=200&status=active${factoryParam}`, { headers: this.headers });
-                    const data = await res.json();
-                    this.permDrawer.machines = data.data ?? [];
-                } catch (e) { /* non-fatal */ }
-                finally { this.permDrawer.loadingMachines = false; }
+                this.permDrawer.loading = false;
             }
         },
 
@@ -981,41 +910,8 @@ machineModal: {
         async savePermissions() {
             this.permDrawer.saving = true;
             try {
-                const u           = this.permDrawer.user;
-                const origRole    = u.role ?? '';
-                const newRole     = this.permDrawer.selectedRole;
-
-                // 1. Role change
-                if (newRole !== origRole) {
-                    if (newRole) {
-                        const r = await fetch(`/admin/users/${u.id}/assign-role`, {
-                            method:  'POST',
-                            headers: this.headers,
-                            body:    JSON.stringify({ role: newRole }),
-                        });
-                        if (!r.ok) {
-                            const d = await r.json();
-                            this.setFlash('error', d.message ?? 'Failed to assign role.');
-                            return;
-                        }
-                    } else {
-                        await fetch(`/admin/users/${u.id}/revoke-role`, {
-                            method: 'DELETE', headers: this.headers,
-                        });
-                    }
-                }
-
-                // 2. Machine assignment (only for operator/viewer final role)
-                if (newRole === 'operator' || newRole === 'viewer') {
-                    await fetch(`/admin/users/${u.id}/assign-machine`, {
-                        method:  'POST',
-                        headers: this.headers,
-                        body:    JSON.stringify({ machine_id: this.permDrawer.machineId || null }),
-                    });
-                }
-
-                // 3. Direct permissions
-                const res  = await fetch(`/admin/users/${u.id}/sync-permissions`, {
+                const u   = this.permDrawer.user;
+                const res = await fetch(`/admin/users/${u.id}/sync-permissions`, {
                     method:  'POST',
                     headers: this.headers,
                     body:    JSON.stringify({ permissions: this.permDrawer.directPerms }),
@@ -1024,18 +920,8 @@ machineModal: {
                 if (!res.ok) {
                     this.setFlash('error', data.message ?? 'Failed to save permissions.');
                 } else {
-                    this.setFlash('success', 'User updated successfully.');
-                    // Update role badge in-place
-                    const idx = this.users.findIndex(uu => uu.id === u.id);
-                    if (idx !== -1) {
-                        const newRole  = this.permDrawer.selectedRole;
-                        const roleLabel = newRole
-                            ? (this.permDrawer.assignableRoles.find(r => r.value === newRole)?.label ?? newRole)
-                            : null;
-                        this.users[idx].role       = newRole || null;
-                        this.users[idx].role_label = roleLabel;
-                    }
                     this.permDrawer.open = false;
+                    this.setFlash('success', 'Permissions saved. Role is unchanged.');
                     this.loadUsers(this.pagination.current_page);
                 }
             } catch (e) {

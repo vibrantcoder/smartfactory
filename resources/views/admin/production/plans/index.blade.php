@@ -27,14 +27,22 @@
 @endpush
 
 @section('content')
+
+@php
+    $hasMultiFactory = $factories->isNotEmpty();
+    $factoriesJson   = $hasMultiFactory ? $factories->toJson() : '[]';
+@endphp
+
 <div
     x-data="productionCalendar(
         '{{ $apiToken }}',
         {{ $factoryId ?? 'null' }},
-        {{ $factories->toJson() }},
+        {{ $factoriesJson }},
         {{ $machines->toJson() }},
         {{ $shifts->toJson() }},
-        {{ $parts->toJson() }}
+        {{ $parts->toJson() }},
+        {{ json_encode($weekOffDays) }},
+        {{ json_encode($holidays) }}
     )"
     x-init="init()"
     class="h-full flex flex-col overflow-hidden bg-gray-50"
@@ -52,7 +60,7 @@
     <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" @click="showModal = false"></div>
 
     {{-- Modal panel: flex-col so header+footer are fixed and content area scrolls --}}
-    <div class="modal-in relative z-10 w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col"
+    <div class="modal-in relative z-10 w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col"
          style="max-height: calc(100vh - 2.5rem)" @click.stop>
 
         {{-- ── Header (always visible) ─────────────────── --}}
@@ -103,7 +111,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">Machine</label>
-                        <select x-model="form.machine_id"
+                        <select x-model="form.machine_id" @change="checkPlanAvailability()"
                                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
                             <option value="">Select machine…</option>
                             <template x-for="m in machines" :key="m.id">
@@ -113,7 +121,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">Shift</label>
-                        <select x-model="form.shift_id"
+                        <select x-model="form.shift_id" @change="checkPlanAvailability()"
                                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
                             <option value="">Select shift…</option>
                             <template x-for="s in shifts" :key="s.id">
@@ -127,7 +135,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">Production Date</label>
-                        <input type="date" x-model="form.planned_date"
+                        <input type="date" x-model="form.planned_date" @change="checkPlanAvailability()"
                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
                     </div>
                     <div>
@@ -137,6 +145,58 @@
                                placeholder="100">
                     </div>
                 </div>
+
+                {{-- Machine Availability Banner (create mode only) --}}
+                <template x-if="modalMode === 'create'">
+                    <div>
+                        {{-- Checking --}}
+                        <template x-if="planAvail.checking">
+                            <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                                <svg class="h-3.5 w-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                                Checking machine availability…
+                            </div>
+                        </template>
+
+                        {{-- Result: Full --}}
+                        <template x-if="!planAvail.checking && planAvail.is_full === true">
+                            <div class="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-start gap-2">
+                                        <span class="mt-0.5 text-red-500">
+                                            <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                            </svg>
+                                        </span>
+                                        <div>
+                                            <p class="text-xs font-semibold text-red-700">Machine fully allocated on this date</p>
+                                            <p class="text-xs text-red-500 mt-0.5" x-show="planAvail.next_date">
+                                                Next available: <span class="font-semibold" x-text="planAvail.next_date"></span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button x-show="planAvail.next_date" type="button"
+                                            @click="form.planned_date = planAvail.next_date; checkPlanAvailability()"
+                                            class="shrink-0 rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors">
+                                        Use this date
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        {{-- Result: Available --}}
+                        <template x-if="!planAvail.checking && planAvail.is_full === false">
+                            <div class="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                                <svg class="h-3.5 w-3.5 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>Machine available — <span class="font-semibold" x-text="planAvail.free_min != null ? Math.round(planAvail.free_min) + ' min free' : 'capacity available'"></span></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
 
                 {{-- Row 3: Part + Process Step (side by side) --}}
                 <div class="grid grid-cols-2 gap-3">
@@ -207,8 +267,9 @@
                     </div>
                 </div>
 
-                {{-- Factory (super-admin create) --}}
-                <template x-if="factories.length > 0 && modalMode === 'create'">
+                {{-- Factory (only when multiple factories exist, create mode only) --}}
+                @if($hasMultiFactory)
+                <template x-if="modalMode === 'create'">
                     <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">Factory</label>
                         <select x-model="form.factory_id"
@@ -220,6 +281,7 @@
                         </select>
                     </div>
                 </template>
+                @endif
 
                 {{-- ── Process Flow Panel ──────────────────── --}}
                 <template x-if="selectedPartProcesses.length > 0">
@@ -458,21 +520,20 @@
 ══════════════════════════════════════════════════════════ --}}
 <div class="shrink-0 flex flex-wrap items-center gap-3 bg-white border-b border-gray-200 px-5 py-2.5 shadow-sm">
 
-    {{-- Factory selector (super-admin) --}}
-    <template x-if="factories.length > 0">
-        <div class="flex items-center gap-2">
-            <label class="text-xs font-medium text-gray-400">Factory</label>
-            <select @change="switchFactory($event.target.value)"
-                    class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                <option value="">All Factories</option>
-                <template x-for="f in factories" :key="f.id">
-                    <option :value="f.id" :selected="currentFactoryId == f.id" x-text="f.name"></option>
-                </template>
-            </select>
-        </div>
-    </template>
-
+    {{-- Factory selector (only when multiple factories exist) --}}
+    @if($hasMultiFactory)
+    <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-gray-400">Factory</label>
+        <select @change="switchFactory($event.target.value)"
+                class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            <option value="">All Factories</option>
+            <template x-for="f in factories" :key="f.id">
+                <option :value="f.id" :selected="currentFactoryId == f.id" x-text="f.name"></option>
+            </template>
+        </select>
+    </div>
     <div class="h-5 w-px bg-gray-200"></div>
+    @endif
 
     {{-- Week navigation --}}
     <div class="flex items-center gap-1">
@@ -522,6 +583,16 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
             Workload
+        </button>
+
+        {{-- Machine Load toggle --}}
+        <button @click="toggleLoadChart()"
+                :class="showLoadChart ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+                class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            </svg>
+            Load Chart
         </button>
 
         <button @click="openCreate('', todayStr, '')"
@@ -650,6 +721,98 @@
 </div>
 
 {{-- ══════════════════════════════════════════════════════════
+     MACHINE LOAD CHART (collapsible)
+     Shows daily utilisation % per machine for the current week.
+     Color coding: green <80 %, amber 80–99 %, red ≥100 %
+══════════════════════════════════════════════════════════ --}}
+<div x-show="showLoadChart" x-cloak
+     class="shrink-0 border-b border-teal-100 bg-gradient-to-r from-teal-50 to-white overflow-x-auto">
+    <div class="px-5 py-3">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold text-teal-700 uppercase tracking-widest flex items-center gap-1.5">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                Machine Load — <span x-text="weekLabel"></span>
+            </h3>
+            <div class="flex items-center gap-3 text-[10px] text-gray-400">
+                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-green-100 border border-green-300"></span> &lt;80%</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-amber-100 border border-amber-300"></span> 80–99%</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-red-100 border border-red-300"></span> ≥100% overload</span>
+                <span x-show="loadingChart" class="text-teal-500">Loading…</span>
+            </div>
+        </div>
+
+        <template x-if="!loadingChart && machineLoad.machines.length === 0">
+            <p class="text-sm text-gray-400 py-2">No planned production for this week.</p>
+        </template>
+
+        <template x-if="machineLoad.machines && machineLoad.machines.length > 0">
+            <table class="w-full text-xs border-separate" style="border-spacing:0">
+                <thead>
+                    <tr>
+                        <th class="sticky left-0 bg-teal-50 border border-gray-200 px-3 py-1.5 text-left font-semibold text-gray-500 w-40">Machine</th>
+                        <template x-for="day in weekDays" :key="day.date">
+                            <th class="border border-gray-200 px-2 py-1.5 text-center font-semibold text-gray-500 min-w-[110px]"
+                                :class="day.isToday ? 'bg-teal-100' : 'bg-teal-50'">
+                                <div x-text="day.label"></div>
+                                <div class="text-[10px] font-normal text-gray-400" x-text="day.date.slice(5)"></div>
+                            </th>
+                        </template>
+                        <th class="bg-teal-100 border border-gray-200 px-2 py-1.5 text-center font-semibold text-teal-700 min-w-[80px]">Week Avg</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="mach in machineLoad.machines" :key="mach.id">
+                        <tr class="hover:bg-teal-50/30">
+                            <td class="sticky left-0 bg-white border border-gray-100 px-3 py-2 font-semibold text-gray-700 text-xs align-top">
+                                <div x-text="mach.name"></div>
+                                <div class="text-[10px] font-normal text-gray-400 mt-0.5"
+                                     x-text="'Avg: ' + Math.round(mach.week_avg) + '%'"></div>
+                            </td>
+                            <template x-for="day in weekDays" :key="day.date">
+                                <td class="border border-gray-100 px-1.5 py-1 align-top">
+                                    <template x-if="mach.days[day.date] && mach.days[day.date].total_qty > 0">
+                                        <div class="space-y-0.5">
+                                            <template x-for="shift in machineLoad.shifts" :key="shift.id">
+                                                <template x-if="mach.days[day.date].by_shift[shift.id] && mach.days[day.date].by_shift[shift.id].qty > 0">
+                                                    <div class="rounded px-1.5 py-0.5 text-[10px] leading-tight"
+                                                         :class="loadCellClass(mach.days[day.date].by_shift[shift.id].pct)">
+                                                        <div class="flex items-center justify-between gap-1">
+                                                            <span class="truncate font-medium" x-text="shift.name"></span>
+                                                            <span class="font-bold shrink-0" x-text="Math.round(mach.days[day.date].by_shift[shift.id].pct) + '%'"></span>
+                                                        </div>
+                                                        <div class="text-[9px] opacity-70" x-text="mach.days[day.date].by_shift[shift.id].qty + ' pcs'"></div>
+                                                    </div>
+                                                </template>
+                                            </template>
+                                            {{-- Day total if >1 shift has load --}}
+                                            <template x-if="machineLoad.shifts.filter(s => mach.days[day.date].by_shift[s.id]?.qty > 0).length > 1">
+                                                <div class="border-t border-gray-200 mt-0.5 pt-0.5 text-[9px] text-center font-semibold text-gray-500"
+                                                     x-text="'Total: ' + Math.round(mach.days[day.date].total_pct) + '% · ' + mach.days[day.date].total_qty + ' pcs'">
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="!mach.days[day.date] || mach.days[day.date].total_qty === 0">
+                                        <span class="text-gray-300 text-center block">—</span>
+                                    </template>
+                                </td>
+                            </template>
+                            {{-- Week avg --}}
+                            <td class="border border-gray-100 px-2 py-2 text-center font-bold text-sm align-middle"
+                                :class="loadCellClass(mach.week_avg)">
+                                <span x-text="Math.round(mach.week_avg) + '%'"></span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </template>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════
      CALENDAR TABLE
      Rows = Machines  |  Columns = Days (Mon–Sun)
      Each cell = shift slots stacked vertically
@@ -667,13 +830,25 @@
 
                 {{-- Day headers --}}
                 <template x-for="day in weekDays" :key="day.date">
-                    <th :class="['border-b-2 border-r border-gray-200 px-3 py-3 text-center min-w-[150px]', day.isToday ? 'bg-indigo-50' : 'bg-gray-50']">
-                        <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400" x-text="day.label"></p>
+                    <th :class="[
+                            'border-b-2 border-r border-gray-200 px-3 py-3 text-center min-w-[150px]',
+                            day.isWeekOff || day.isHoliday ? 'bg-red-50' :
+                            day.isToday ? 'bg-indigo-50' : 'bg-gray-50'
+                        ]">
+                        <p class="text-[10px] font-bold uppercase tracking-widest"
+                           :class="day.isWeekOff || day.isHoliday ? 'text-red-400' : 'text-gray-400'"
+                           x-text="day.label"></p>
                         <p class="mt-0.5 text-xl font-extrabold leading-none"
-                           :class="day.isToday ? 'text-indigo-600' : 'text-gray-700'"
+                           :class="day.isWeekOff || day.isHoliday ? 'text-red-500' : day.isToday ? 'text-indigo-600' : 'text-gray-700'"
                            x-text="day.dayNum"></p>
-                        <p class="text-[10px] text-gray-400 mt-0.5" x-text="day.monthLabel"></p>
-                        <div x-show="day.isToday" class="mx-auto mt-1 h-1 w-5 rounded-full bg-indigo-400"></div>
+                        <p class="text-[10px] mt-0.5"
+                           :class="day.isWeekOff || day.isHoliday ? 'text-red-400' : 'text-gray-400'"
+                           x-text="day.monthLabel"></p>
+                        <div x-show="day.isToday && !day.isWeekOff && !day.isHoliday" class="mx-auto mt-1 h-1 w-5 rounded-full bg-indigo-400"></div>
+                        {{-- Holiday name badge --}}
+                        <div x-show="day.isHoliday" class="mx-auto mt-1 text-[9px] font-medium text-red-500 leading-tight truncate max-w-[100px]" x-text="day.holidayName"></div>
+                        {{-- Week-off badge --}}
+                        <div x-show="day.isWeekOff && !day.isHoliday" class="mx-auto mt-1 text-[9px] font-medium text-red-400">Week Off</div>
                     </th>
                 </template>
             </tr>
@@ -699,15 +874,46 @@
                 <tr class="group border-b border-gray-100">
 
                     {{-- Machine label (sticky left) --}}
-                    <td class="machine-col bg-white border-r border-gray-100 px-4 py-3 align-top group-hover:bg-slate-50 transition-colors">
-                        <p class="text-sm font-bold text-gray-800 leading-tight" x-text="machine.name"></p>
-                        <p class="text-xs text-gray-400 mt-0.5 truncate"
+                    <td class="machine-col bg-white border-r border-gray-100 px-3 py-3 align-top group-hover:bg-slate-50 transition-colors w-44 min-w-[176px]">
+                        <p class="text-sm font-bold text-gray-800 leading-tight truncate" x-text="machine.name"></p>
+                        <p class="text-[11px] text-gray-400 mt-0.5 truncate"
                            x-text="machine.code + (machine.type ? ' · ' + machine.type : '')"></p>
+
+                        {{-- Weekly load bar --}}
+                        <template x-if="machineLoadMap[machine.id]">
+                            <div class="mt-1.5">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <span class="text-[10px] text-gray-400">Week load</span>
+                                    <span class="text-[10px] font-bold"
+                                          :class="machineLoadMap[machine.id].text"
+                                          x-text="Math.round(machineLoadMap[machine.id].week_avg) + '%'"></span>
+                                </div>
+                                <div class="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                                    <div class="h-full rounded-full transition-all duration-500"
+                                         :class="machineLoadMap[machine.id].color"
+                                         :style="'width:' + machineLoadMap[machine.id].bar_pct + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!machineLoadMap[machine.id]">
+                            <div class="mt-1.5">
+                                <div class="flex items-center justify-between mb-0.5">
+                                    <span class="text-[10px] text-gray-400">Week load</span>
+                                    <span class="text-[10px] text-gray-300">0%</span>
+                                </div>
+                                <div class="h-1.5 w-full rounded-full bg-gray-100"></div>
+                            </div>
+                        </template>
                     </td>
 
                     {{-- One <td> per day --}}
                     <template x-for="day in weekDays" :key="day.date">
-                        <td :class="['border-r border-gray-100 p-2 align-top group-hover:bg-slate-50/30 transition-colors', day.isToday ? 'bg-indigo-50/30' : '']"
+                        <td :class="[
+                                'border-r border-gray-100 p-2 align-top transition-colors',
+                                day.isWeekOff || day.isHoliday
+                                    ? 'bg-red-50/60'
+                                    : day.isToday ? 'bg-indigo-50/30' : 'group-hover:bg-slate-50/30'
+                            ]"
                             style="min-height: 90px;">
                             <div class="space-y-1.5">
 
@@ -808,14 +1014,16 @@
 
 @push('scripts')
 <script>
-function productionCalendar(apiToken, factoryId, factories, machines, shifts, parts) {
+function productionCalendar(apiToken, factoryId, factories, machines, shifts, parts, weekOffDays, holidays) {
     return {
         apiToken,
         currentFactoryId: factoryId,
-        factories:  factories || [],
-        machines:       machines  || [],
-        shifts:         shifts    || [],
-        parts:          parts     || [],
+        factories:   factories   || [],
+        machines:    machines    || [],
+        shifts:      shifts      || [],
+        parts:       parts       || [],
+        weekOffDays: weekOffDays || [],   // [0..6] — 0=Sunday
+        holidays:    holidays    || [],   // [{date:'YYYY-MM-DD', name:'...'}, ...]
         machinePageSize: 15,
 
         plans:   [],
@@ -823,6 +1031,9 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         error:   null,
         weekStart: null,
         showWorkload: false,
+        showLoadChart: false,
+        machineLoad:   { machines: [], shifts: [] },
+        loadingChart:  false,
 
         // Modal state
         showModal:  false,
@@ -831,6 +1042,9 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         deleting:   false,
         formError:  null,
         editPlan:   null,
+
+        // Availability check state (create mode)
+        planAvail: { checking: false, is_full: null, next_date: null, free_min: null },
 
         // Record Actuals state
         actualsForm:   { actual_qty: 0, defect_qty: 0, notes: '' },
@@ -865,19 +1079,26 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
 
         get weekDays() {
             if (!this.weekStart) return [];
-            const LABELS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-            const MONTHS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            const today   = this.todayStr;
-            const days    = [];
+            const LABELS      = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const today       = this.todayStr;
+            const holidaySet  = new Set((this.holidays || []).map(h => h.date));
+            const weekOffSet  = new Set((this.weekOffDays || []).map(Number));
+            const days        = [];
             for (let i = 0; i < 7; i++) {
-                const d      = new Date(this.weekStart.getTime() + i * 86400000);
-                const ds     = this.fmtDate(d);
+                const d         = new Date(this.weekStart.getTime() + i * 86400000);
+                const ds        = this.fmtDate(d);
+                const dow       = d.getDay();
+                const hol       = holidaySet.has(ds) ? (this.holidays.find(h => h.date === ds)?.name || '') : null;
                 days.push({
                     date:       ds,
-                    label:      LABELS[d.getDay()],
+                    label:      LABELS[dow],
                     dayNum:     d.getDate(),
                     monthLabel: MONTHS[d.getMonth()],
                     isToday:    ds === today,
+                    isWeekOff:  weekOffSet.has(dow),
+                    isHoliday:  !!hol,
+                    holidayName: hol,
                 });
             }
             return days;
@@ -901,6 +1122,27 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         // O(1) lookup: "machineId:date:shiftId" → array of plans
         // planned_date from Laravel API is ISO datetime ("2026-03-02T00:00:00.000000Z")
         // but weekDays uses "YYYY-MM-DD" — normalize to date-only for matching.
+        // machine_id → { week_avg, color_class } — used by calendar machine column
+        get machineLoadMap() {
+            const map = {};
+            for (const m of (this.machineLoad.machines || [])) {
+                const pct = m.week_avg ?? 0;
+                map[m.id] = {
+                    week_avg: pct,
+                    bar_pct:  Math.min(100, Math.round(pct)),
+                    color:    pct >= 100 ? 'bg-red-500'
+                            : pct >= 80  ? 'bg-amber-400'
+                            : pct > 0    ? 'bg-green-500'
+                            : 'bg-gray-200',
+                    text:     pct >= 100 ? 'text-red-600'
+                            : pct >= 80  ? 'text-amber-600'
+                            : pct > 0    ? 'text-green-600'
+                            : 'text-gray-400',
+                };
+            }
+            return map;
+        },
+
         get plansMap() {
             const m = {};
             for (const p of this.plans) {
@@ -1050,6 +1292,7 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         init() {
             this.weekStart = this.getMonday(new Date());
             this.loadPlans();
+            this.loadMachineLoad();
         },
 
         // ── Week navigation ─────────────────────────────────
@@ -1065,21 +1308,71 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         prevWeek() {
             this.weekStart = new Date(this.weekStart.getTime() - 7 * 86400000);
             this.loadPlans();
+            this.loadMachineLoad();
         },
 
         nextWeek() {
             this.weekStart = new Date(this.weekStart.getTime() + 7 * 86400000);
             this.loadPlans();
+            this.loadMachineLoad();
         },
 
         goToToday() {
             this.weekStart = this.getMonday(new Date());
             this.loadPlans();
+            this.loadMachineLoad();
         },
 
         switchFactory(id) {
             this.currentFactoryId = id ? parseInt(id) : null;
             this.loadPlans();
+            this.loadMachineLoad();
+        },
+
+        toggleLoadChart() {
+            this.showLoadChart = !this.showLoadChart;
+            if (this.showLoadChart && this.machineLoad.machines.length === 0) {
+                this.loadMachineLoad();
+            }
+        },
+
+        async loadMachineLoad() {
+            if (!this.weekStart) return;
+            this.loadingChart = true;
+            try {
+                const from   = this.fmtDate(this.weekStart);
+                const to     = this.fmtDate(new Date(this.weekStart.getTime() + 6 * 86400000));
+                const params = new URLSearchParams({ from_date: from, to_date: to });
+                if (this.currentFactoryId) params.append('factory_id', this.currentFactoryId);
+
+                const res  = await fetch(`/api/v1/machine-load?${params}`, {
+                    headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    this.machineLoad = {
+                        machines: data.machines ?? [],
+                        shifts:   data.shifts   ?? [],
+                    };
+                } else {
+                    this.machineLoad = { machines: [], shifts: [] };
+                }
+            } catch (e) {
+                this.machineLoad = { machines: [], shifts: [] };
+            } finally {
+                this.loadingChart = false;
+            }
+        },
+
+        loadCellClass(pct) {
+            if (!pct || pct <= 0)  return 'bg-white';
+            if (pct >= 100)        return 'bg-red-50 text-red-700';
+            if (pct >= 80)         return 'bg-amber-50 text-amber-700';
+            return 'bg-green-50 text-green-700';
+        },
+
+        machWeekAvg(mach) {
+            return mach.week_avg ?? 0;
         },
 
         // ── Data loading ────────────────────────────────────
@@ -1122,9 +1415,10 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         // ── Modal open ──────────────────────────────────────
 
         openCreate(machineId, date, shiftId) {
-            this.modalMode = 'create';
-            this.editPlan  = null;
-            this.formError = null;
+            this.modalMode  = 'create';
+            this.editPlan   = null;
+            this.formError  = null;
+            this.planAvail  = { checking: false, is_full: null, next_date: null, free_min: null };
             this.form = {
                 machine_id:      machineId || '',
                 part_id:         '',
@@ -1210,6 +1504,36 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             }
         },
 
+        // ── Machine Availability ─────────────────────────────
+
+        async checkPlanAvailability() {
+            if (this.modalMode !== 'create') return;
+            if (!this.form.machine_id || !this.form.shift_id || !this.form.planned_date) {
+                this.planAvail = { checking: false, is_full: null, next_date: null, free_min: null };
+                return;
+            }
+            this.planAvail = { checking: true, is_full: null, next_date: null, free_min: null };
+            try {
+                const params = new URLSearchParams({
+                    machine_id: this.form.machine_id,
+                    shift_id:   this.form.shift_id,
+                    date:       this.form.planned_date,
+                });
+                const res  = await fetch(`/api/v1/machine-availability?${params}`, {
+                    headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
+                });
+                const data = await res.json();
+                this.planAvail = {
+                    checking:  false,
+                    is_full:   data.is_full ?? null,
+                    next_date: data.next_available_date ?? null,
+                    free_min:  data.free_min ?? null,
+                };
+            } catch {
+                this.planAvail = { checking: false, is_full: null, next_date: null, free_min: null };
+            }
+        },
+
         // ── CRUD ────────────────────────────────────────────
 
         async savePlan() {
@@ -1220,6 +1544,11 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             }
             if (this.selectedPartProcesses.length > 0 && !this.form.part_process_id) {
                 this.formError = 'Please select the Process Step this machine will run.';
+                return;
+            }
+            if (this.modalMode === 'create' && this.planAvail.is_full === true) {
+                const next = this.planAvail.next_date ? ` Next available: ${this.planAvail.next_date}.` : '';
+                this.formError = `Machine is fully allocated on this date.${next} Please choose another date or use the suggested date above.`;
                 return;
             }
             this.saving    = true;

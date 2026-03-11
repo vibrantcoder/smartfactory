@@ -10,6 +10,8 @@
     $factoriesJson   = $hasMultiFactory ? $factories->toJson() : '[]';
     $customersJson   = $customers->toJson();
     $partsJson       = $parts->toJson();
+    $machinesJson    = $machines->toJson();
+    $shiftsJson      = $shifts->toJson();
 @endphp
 
 <div x-data="workOrderManager(
@@ -18,7 +20,11 @@
     {{ $factoryId ?? 'null' }},
     {{ $factoriesJson }},
     {{ $customersJson }},
-    {{ $partsJson }}
+    {{ $partsJson }},
+    {{ $machinesJson }},
+    {{ $shiftsJson }},
+    {{ json_encode($weekOffDays) }},
+    {{ json_encode($holidays) }}
 )" x-init="init()">
 
     {{-- Flash --}}
@@ -157,6 +163,12 @@
                                             <button @click="quickStatus(wo, 'released')"
                                                     class="rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors">
                                                 Release
+                                            </button>
+                                        </template>
+                                        <template x-if="['confirmed','released','in_progress'].includes(wo.status)">
+                                            <button @click="openSchedule(wo)"
+                                                    class="rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100 transition-colors">
+                                                Schedule
                                             </button>
                                         </template>
                                         <template x-if="wo.status === 'draft'">
@@ -401,6 +413,463 @@
         </div>
     </template>
 
+    {{-- ══════════════════════════════════════════════════════════
+         SCHEDULE PRODUCTION MODAL
+    ══════════════════════════════════════════════════════════ --}}
+    <template x-if="schedModal.open">
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             @keydown.escape.window="schedModal.open = false">
+            <div class="absolute inset-0 bg-black/40" @click="schedModal.open = false"></div>
+            <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl modal-in overflow-y-auto" style="max-height:92vh">
+
+                {{-- Header --}}
+                <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-800">Schedule Production</h3>
+                        <p class="text-xs text-gray-400 mt-0.5" x-text="schedModal.wo ? schedModal.wo.wo_number + ' — ' + schedModal.wo.part_name : ''"></p>
+                    </div>
+                    <button @click="schedModal.open = false" class="text-gray-400 hover:text-gray-600">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                {{-- Body --}}
+                <div class="px-6 py-5 space-y-4">
+
+                    {{-- WO qty overview --}}
+                    <div class="rounded-lg bg-teal-50 border border-teal-100 px-4 py-3 text-xs text-teal-800 space-y-1">
+                        <div class="flex justify-between">
+                            <span class="text-teal-600">Part</span>
+                            <span class="font-semibold" x-text="schedModal.wo?.part_name + ' (' + schedModal.wo?.part_number + ')'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-teal-600">Total Order Qty</span>
+                            <span class="font-semibold" x-text="schedModal.wo?.total_planned_qty?.toLocaleString()"></span>
+                        </div>
+                        <template x-if="!schedModal.qtyLoading && schedModal.qtySummary">
+                            <div class="pt-1 border-t border-teal-200 space-y-0.5">
+                                <div class="flex justify-between">
+                                    <span class="text-teal-600">Already Scheduled</span>
+                                    <span class="font-semibold text-amber-700" x-text="schedModal.qtySummary.total_scheduled.toLocaleString()"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-teal-600" x-text="schedModal.form.part_process_id ? 'Remaining (process)' : 'Remaining'"></span>
+                                    <span class="font-semibold" :class="schedActiveRemaining > 0 ? 'text-green-700' : 'text-gray-400'"
+                                          x-text="schedActiveRemaining !== null ? schedActiveRemaining.toLocaleString() : '…'"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="schedModal.qtyLoading" class="text-teal-500 text-center">Loading schedule history…</div>
+                        <div class="flex justify-between pt-1 border-t border-teal-200">
+                            <span class="text-teal-600">Cycle Time</span>
+                            <span class="font-semibold" x-text="schedCycleTimeLabel"></span>
+                        </div>
+                        <div class="flex justify-between" x-show="schedModal.form.shift_ids.length > 0 && schedCapacityLabel">
+                            <span class="text-teal-600">Daily Capacity</span>
+                            <span class="font-semibold text-indigo-700" x-text="schedCapacityLabel"></span>
+                        </div>
+                    </div>
+
+                    {{-- Schedule history by process (collapsible) --}}
+                    <template x-if="schedModal.qtySummary && schedModal.qtySummary.by_process.length > 0">
+                        <div class="rounded-lg bg-gray-50 border border-gray-200 text-xs overflow-hidden">
+                            <button @click="schedModal.showHistory = !schedModal.showHistory"
+                                    class="w-full flex items-center justify-between px-3 py-2 text-gray-600 font-medium hover:bg-gray-100 transition-colors">
+                                <span class="flex items-center gap-1.5">
+                                    <svg class="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                    </svg>
+                                    Schedule History by Process
+                                </span>
+                                <span x-text="schedModal.showHistory ? '▲' : '▼'" class="text-gray-400 text-[10px]"></span>
+                            </button>
+                            <template x-if="schedModal.showHistory">
+                                <div class="border-t border-gray-200 divide-y divide-gray-100">
+                                    <template x-for="row in schedModal.qtySummary.by_process" :key="row.part_process_id ?? 'none'">
+                                        <div x-data="{ open: true }">
+                                            {{-- Process header row --}}
+                                            <button @click="open = !open"
+                                                    class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                                                <span class="flex items-center gap-1.5 font-semibold text-gray-700">
+                                                    <span x-show="row.sequence_order"
+                                                          class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-100 text-indigo-600 text-[9px] font-bold"
+                                                          x-text="row.sequence_order"></span>
+                                                    <span x-text="row.process_name"></span>
+                                                </span>
+                                                <span class="flex items-center gap-3 text-[11px]">
+                                                    <span class="text-amber-700 font-semibold"
+                                                          x-text="row.scheduled_qty.toLocaleString() + ' pcs scheduled'"></span>
+                                                    <span class="font-semibold"
+                                                          :class="Math.max(0, (schedModal.wo?.total_planned_qty ?? 0) - row.scheduled_qty) > 0 ? 'text-green-600' : 'text-gray-400'"
+                                                          x-text="Math.max(0, (schedModal.wo?.total_planned_qty ?? 0) - row.scheduled_qty).toLocaleString() + ' rem'"></span>
+                                                    <span x-text="open ? '▲' : '▼'" class="text-gray-400 text-[9px]"></span>
+                                                </span>
+                                            </button>
+                                            {{-- Date breakdown sub-table --}}
+                                            <template x-if="open">
+                                                <table class="w-full bg-white">
+                                                    <thead>
+                                                        <tr class="bg-gray-50 border-b border-gray-100">
+                                                            <th class="pl-8 pr-3 py-1 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Date</th>
+                                                            <th class="px-3 py-1 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Planned Qty</th>
+                                                            <th class="px-3 py-1 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Cumulative</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <template x-for="(d, idx) in row.dates" :key="d.planned_date">
+                                                            <tr class="border-b border-gray-50 hover:bg-blue-50/30">
+                                                                <td class="pl-8 pr-3 py-1.5 text-gray-600 font-mono text-[11px]" x-text="d.planned_date"></td>
+                                                                <td class="px-3 py-1.5 text-right font-semibold text-gray-700 text-[11px]"
+                                                                    x-text="d.planned_qty.toLocaleString()"></td>
+                                                                <td class="px-3 py-1.5 text-right text-indigo-600 font-semibold text-[11px]"
+                                                                    x-text="row.dates.slice(0, idx + 1).reduce((s, r) => s + r.planned_qty, 0).toLocaleString()"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    {{-- Part Process --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">
+                            Part Process *
+                            <span class="font-normal text-gray-400">(determines cycle time)</span>
+                        </label>
+                        <template x-if="schedProcesses.length === 0">
+                            <p class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                No routing defined for this part. Scheduling will use the part's std cycle time.
+                            </p>
+                        </template>
+                        <template x-if="schedProcesses.length > 0">
+                            <select x-model="schedModal.form.part_process_id"
+                                    @change="if (schedActiveRemaining !== null) schedModal.form.plan_qty = schedActiveRemaining; checkMachineAvailability()"
+                                    class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-300">
+                                <option value="">— Select process —</option>
+                                <template x-for="proc in schedProcesses" :key="proc.id">
+                                    <option :value="proc.id"
+                                            x-text="proc.sequence_order + '. ' + proc.process_master_name + (proc.effective_cycle_time > 0 ? ' — ' + toMMSS(proc.effective_cycle_time) + ' min' : '')">
+                                    </option>
+                                </template>
+                            </select>
+                        </template>
+                    </div>
+
+                    {{-- Machine --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Machine *</label>
+                        <select x-model="schedModal.form.machine_id"
+                                @change="schedModal.availability = null; checkMachineAvailability()"
+                                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-300">
+                            <option value="">— Select machine —</option>
+                            <template x-for="m in allMachines" :key="m.id">
+                                <option :value="m.id" x-text="m.name"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    {{-- Shifts (multi-select checkboxes) --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">
+                            Shift *
+                            <span class="font-normal text-gray-400">(select one or more)</span>
+                        </label>
+                        <div class="rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+                            <template x-for="s in allShifts" :key="s.id">
+                                <label class="flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors"
+                                       :class="schedModal.form.shift_ids.includes(s.id) ? 'bg-teal-50' : 'hover:bg-gray-50'">
+                                    <input type="checkbox"
+                                           :checked="schedModal.form.shift_ids.includes(s.id)"
+                                           @change="toggleSchedShift(s.id)"
+                                           class="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-400">
+                                    <span class="flex-1 text-sm font-medium"
+                                          :class="schedModal.form.shift_ids.includes(s.id) ? 'text-teal-700' : 'text-gray-700'"
+                                          x-text="s.name"></span>
+                                    <span class="text-[11px] text-gray-400"
+                                          x-text="((s.duration_min || 0) - (s.break_min || 0)) + ' min'"></span>
+                                </label>
+                            </template>
+                        </div>
+
+                        {{-- Selected shifts summary --}}
+                        <div x-show="schedModal.form.shift_ids.length > 0" class="mt-1.5 flex flex-wrap gap-1">
+                            <template x-for="sid in schedModal.form.shift_ids" :key="sid">
+                                <span class="inline-flex items-center gap-1 rounded-full bg-teal-100 text-teal-700 text-[11px] font-semibold px-2 py-0.5">
+                                    <span x-text="allShifts.find(s=>s.id==sid)?.name ?? sid"></span>
+                                    <button type="button" @click="toggleSchedShift(sid)" class="hover:text-teal-900">✕</button>
+                                </span>
+                            </template>
+                        </div>
+
+                        <template x-if="schedModal.form.shift_ids.length > 1">
+                            <p class="mt-1 text-[11px] text-indigo-600 font-medium">
+                                Combined: <span x-text="schedCombinedCapacityMin + ' min/day'"></span>
+                                <template x-if="schedEffectiveCycleMin > 0">
+                                    — <span x-text="Math.floor(schedCombinedCapacityMin / schedEffectiveCycleMin).toLocaleString()"></span> pcs/day
+                                </template>
+                            </p>
+                        </template>
+                    </div>
+
+                    {{-- Plan Qty --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">
+                            Plan Qty *
+                            <template x-if="schedModal.qtySummary">
+                                <span class="font-normal text-gray-400">
+                                    (remaining: <span :class="schedActiveRemaining > 0 ? 'font-semibold text-green-600' : 'font-semibold text-red-500'"
+                                                      x-text="schedActiveRemaining !== null ? schedActiveRemaining.toLocaleString() : '…'"></span>
+                                    of <span x-text="schedModal.wo?.total_planned_qty?.toLocaleString()"></span>)
+                                </span>
+                            </template>
+                        </label>
+
+                        {{-- Remaining = 0 → fully scheduled for this process, block input --}}
+                        <template x-if="schedModal.qtySummary && schedActiveRemaining === 0">
+                            <div class="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700 flex items-start gap-2">
+                                <svg class="h-4 w-4 shrink-0 mt-0.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span x-text="schedModal.form.part_process_id
+                                    ? `All ${(schedModal.wo?.total_planned_qty ?? 0).toLocaleString()} units are already scheduled for this process. Select a different process or cancel existing plans.`
+                                    : `All ${(schedModal.wo?.total_planned_qty ?? 0).toLocaleString()} units are already scheduled. Cancel existing plans to reschedule.`">
+                                </span>
+                            </div>
+                        </template>
+
+                        <template x-if="!schedModal.qtySummary || schedActiveRemaining > 0">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <input type="number"
+                                           x-model.number="schedModal.form.plan_qty"
+                                           min="1"
+                                           :max="schedActiveRemaining !== null ? schedActiveRemaining : schedModal.wo?.total_planned_qty"
+                                           :class="schedPlanQtyError ? 'border-red-400 bg-red-50' : 'border-gray-200'"
+                                           class="flex-1 rounded-lg border px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-300">
+                                    <template x-if="schedActiveRemaining > 0">
+                                        <button type="button"
+                                                @click="schedModal.form.plan_qty = schedActiveRemaining"
+                                                class="shrink-0 rounded-lg border border-green-300 bg-green-50 px-2.5 py-2 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors whitespace-nowrap">
+                                            Use remaining
+                                        </button>
+                                    </template>
+                                    <template x-if="schedModal.wo && (!schedModal.qtySummary || schedActiveRemaining === schedModal.wo.total_planned_qty)">
+                                        <button type="button"
+                                                @click="schedModal.form.plan_qty = schedModal.wo.total_planned_qty"
+                                                class="shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors whitespace-nowrap">
+                                            Full qty
+                                        </button>
+                                    </template>
+                                </div>
+                                {{-- Exceeds remaining --}}
+                                <template x-if="schedPlanQtyError">
+                                    <p class="mt-1 text-[11px] text-red-600 font-medium" x-text="schedPlanQtyError"></p>
+                                </template>
+                                <template x-if="!schedPlanQtyError && schedModal.form.plan_qty > 0 && schedModal.form.shift_ids.length > 0 && schedEffectiveCycleMin > 0">
+                                    <p class="mt-1 text-[11px] text-gray-400"
+                                       x-text="'Est. ' + schedEstDays + ' day(s) to complete ' + schedModal.form.plan_qty.toLocaleString() + ' units'"></p>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    {{-- Start date --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Start Date *</label>
+                        <input type="date"
+                               x-model="schedModal.form.start_date"
+                               @change="schedModal.form.allow_week_off_holiday = false; checkMachineAvailability()"
+                               class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-300">
+
+                        {{-- Week-off / Holiday warning --}}
+                        <template x-if="schedModal.form.start_date && isOffDay(schedModal.form.start_date)">
+                            <div class="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                                <div class="flex items-start gap-2">
+                                    <svg class="h-4 w-4 shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <div class="flex-1">
+                                        <p class="text-xs font-semibold text-amber-800"
+                                           x-text="getOffDayReason(schedModal.form.start_date)"></p>
+                                        <p class="text-[11px] text-amber-600 mt-0.5">
+                                            By default these days are skipped during scheduling.
+                                        </p>
+                                        <label class="mt-2 flex items-center gap-2 cursor-pointer select-none">
+                                            <input type="checkbox"
+                                                   x-model="schedModal.form.allow_week_off_holiday"
+                                                   class="h-3.5 w-3.5 rounded border-amber-300 accent-amber-600">
+                                            <span class="text-xs font-medium text-amber-800">
+                                                Yes, plan on week-off / holiday days too
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        {{-- Availability feedback --}}
+                        <div x-show="schedModal.availChecking" class="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-400">
+                            <svg class="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                            Checking machine availability…
+                        </div>
+
+                        {{-- Machine FULL on selected date --}}
+                        <template x-if="!schedModal.availChecking && schedModal.availability && schedModal.availability.is_full">
+                            <div class="mt-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                                <div class="flex items-start gap-2">
+                                    <svg class="h-4 w-4 shrink-0 mt-0.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636"/>
+                                    </svg>
+                                    <div class="space-y-1">
+                                        <p class="font-semibold">
+                                            <span x-text="schedModal.availability.machine_name"></span>
+                                            — all selected shifts fully booked on
+                                            <span x-text="schedModal.availability.date"></span>.
+                                        </p>
+                                        {{-- Per-shift detail --}}
+                                        <template x-if="schedModal.availability.shift_results && schedModal.availability.shift_results.length > 1">
+                                            <div class="space-y-0.5 mt-1">
+                                                <template x-for="sr in schedModal.availability.shift_results" :key="sr.date + '-' + (sr.shift_id ?? 0)">
+                                                    <p class="flex items-center gap-1.5">
+                                                        <span class="inline-block w-2 h-2 rounded-full"
+                                                              :class="sr.is_full ? 'bg-red-400' : 'bg-green-400'"></span>
+                                                        <span x-text="allShifts.find(s=>s.id == schedModal.form.shift_ids[schedModal.availability.shift_results.indexOf(sr)])?.name ?? 'Shift'"></span>:
+                                                        <span x-text="sr.is_full ? 'Full (' + sr.used_min + '/' + sr.capacity_min + ' min)' : sr.free_min + ' min free (' + (sr.free_qty ?? 0) + ' pcs)'"></span>
+                                                    </p>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="schedModal.availability.next_available_date">
+                                            <p class="flex items-center gap-2 mt-1">
+                                                Next available (all shifts):
+                                                <strong x-text="schedModal.availability.next_available_date"></strong>
+                                                <button type="button"
+                                                        @click="schedModal.form.start_date = schedModal.availability.next_available_date; checkMachineAvailability()"
+                                                        class="rounded bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 font-semibold transition-colors">
+                                                    Use this date
+                                                </button>
+                                            </p>
+                                        </template>
+                                        <template x-if="!schedModal.availability.next_available_date">
+                                            <p class="text-red-500 mt-1">No availability found in the next 60 days.</p>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        {{-- Machine has capacity (at least one shift free) --}}
+                        <template x-if="!schedModal.availChecking && schedModal.availability && !schedModal.availability.is_full">
+                            <div class="mt-1.5 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-[11px] text-green-700 space-y-0.5">
+                                <p class="font-semibold flex items-center gap-1.5">
+                                    <svg class="h-3.5 w-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                    Available on <span x-text="schedModal.availability.date"></span>
+                                    — <span x-text="schedModal.availability.free_min"></span> min free
+                                    (<span x-text="Number(schedModal.availability.free_qty ?? 0).toLocaleString()"></span> pcs combined)
+                                </p>
+                                {{-- Per-shift breakdown when multiple selected --}}
+                                <template x-if="schedModal.availability.shift_results && schedModal.availability.shift_results.length > 1">
+                                    <div class="space-y-0.5 pl-5">
+                                        <template x-for="(sr, i) in schedModal.availability.shift_results" :key="i">
+                                            <p class="flex items-center gap-1.5">
+                                                <span class="inline-block w-2 h-2 rounded-full"
+                                                      :class="sr.is_full ? 'bg-red-400' : 'bg-green-400'"></span>
+                                                <span x-text="allShifts.find(s=>s.id == schedModal.form.shift_ids[i])?.name ?? 'Shift'"></span>:
+                                                <span x-text="sr.is_full ? 'Full' : sr.free_min + ' min free (' + (sr.free_qty ?? 0) + ' pcs)'"></span>
+                                            </p>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    {{-- Error --}}
+                    <template x-if="schedModal.error">
+                        <p class="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700" x-text="schedModal.error"></p>
+                    </template>
+
+                    {{-- Result --}}
+                    <template x-if="schedModal.result">
+                        <div class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-xs text-green-800 space-y-1">
+                            <p class="font-semibold text-green-700 text-sm" x-text="schedModal.result.message"></p>
+                            <div class="flex justify-between">
+                                <span class="text-green-600">Plans created</span>
+                                <span class="font-semibold" x-text="schedModal.result.plan_count + ' day(s)'"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-green-600">Date range</span>
+                                <span class="font-semibold" x-text="formatDate(schedModal.result.from_date) + ' → ' + formatDate(schedModal.result.to_date)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-green-600">Qty scheduled this run</span>
+                                <span class="font-semibold" x-text="schedModal.result.total_qty?.toLocaleString()"></span>
+                            </div>
+                            <template x-if="schedActiveRemaining !== null">
+                                <div class="flex justify-between border-t border-green-200 pt-1 mt-1">
+                                    <span class="text-green-600" x-text="schedModal.form.part_process_id ? 'Remaining (process) after' : 'Remaining after this'"></span>
+                                    <span class="font-semibold"
+                                          :class="Math.max(0, schedActiveRemaining - schedModal.result.total_qty) > 0 ? 'text-amber-700' : 'text-green-700'"
+                                          x-text="Math.max(0, schedActiveRemaining - schedModal.result.total_qty).toLocaleString()"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                </div>
+
+                {{-- Footer --}}
+                <div class="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                    <button @click="schedModal.open = false"
+                            class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                        Close
+                    </button>
+                    <button @click="saveSchedule()"
+                            x-show="!schedModal.result"
+                            :disabled="schedModal.saving
+                                || !schedModal.form.machine_id
+                                || !schedModal.form.shift_ids.length
+                                || !schedModal.form.start_date
+                                || !(schedModal.form.plan_qty > 0)
+                                || !!schedPlanQtyError
+                                || schedActiveRemaining === 0
+                                || (schedModal.availability && schedModal.availability.is_full)"
+                            :class="(schedModal.saving
+                                || !schedModal.form.machine_id
+                                || !schedModal.form.shift_ids.length
+                                || !schedModal.form.start_date
+                                || !(schedModal.form.plan_qty > 0)
+                                || !!schedPlanQtyError
+                                || schedActiveRemaining === 0
+                                || (schedModal.availability && schedModal.availability.is_full))
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-md hover:shadow-lg cursor-pointer'"
+                            class="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-bold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1">
+                        <svg x-show="schedModal.saving" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <svg x-show="!schedModal.saving" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span x-text="schedModal.saving ? 'Scheduling…' : 'Schedule Production'"></span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </template>
+
 </div>{{-- end x-data --}}
 
 @endsection
@@ -410,7 +879,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 <script>
-function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCustomers, allParts) {
+function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCustomers, allParts, allMachines, allShifts, weekOffDays, holidays) {
     return {
         orders:     [],
         pagination: {},
@@ -420,6 +889,10 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
         factories:  factories || [],
         allCustomers: allCustomers || [],
         allParts:   allParts || [],
+        allMachines: allMachines || [],
+        allShifts:  allShifts || [],
+        weekOffDays: (weekOffDays || []).map(Number),
+        holidays:    (holidays || []),
 
         // Filters
         currentFactoryId: factoryId ?? '',
@@ -438,6 +911,12 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
                 priority: 'medium', status: 'draft',
                 notes: '',
             },
+        },
+
+        schedModal: {
+            open: false, saving: false, wo: null, error: null, result: null,
+            qtyLoading: false, qtySummary: null, showHistory: false,
+            form: { part_process_id: '', machine_id: '', shift_ids: [], start_date: '', plan_qty: '' },
         },
 
         // ── Init ───────────────────────────────────────────────
@@ -478,6 +957,95 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
             const h = Math.floor(totalSec / 3600);
             const m = Math.round((totalSec % 3600) / 60);
             return h + 'h ' + m + 'm';
+        },
+
+        // ── Schedule modal computed ────────────────────────────
+
+        // All processes for the WO's part (for the process dropdown)
+        get schedProcesses() {
+            const wo = this.schedModal.wo;
+            if (!wo) return [];
+            const part = this.allParts.find(p => p.id == wo.part_id);
+            return (part && part.processes) ? part.processes : [];
+        },
+
+        // Effective cycle time for the currently selected process (or part fallback)
+        get schedEffectiveCycleMin() {
+            const procId = this.schedModal.form.part_process_id;
+            if (procId) {
+                const proc = this.schedProcesses.find(p => p.id == procId);
+                if (proc && proc.effective_cycle_time > 0) return parseFloat(proc.effective_cycle_time);
+            }
+            // Fallback: part level
+            const wo   = this.schedModal.wo;
+            const part = wo ? this.allParts.find(p => p.id == wo.part_id) : null;
+            if (!part) return 0;
+            if (part.total_cycle_time > 0) return parseFloat(part.total_cycle_time);
+            return part.cycle_time_std > 0 ? parseFloat(part.cycle_time_std) / 60 : 0;
+        },
+
+        get schedCycleTimeLabel() {
+            const ct = this.schedEffectiveCycleMin;
+            if (ct <= 0) return 'Not set';
+            return this.toMMSS(ct) + ' min/unit';
+        },
+
+        // Total available minutes/day across all selected shifts
+        get schedCombinedCapacityMin() {
+            const ids = this.schedModal.form.shift_ids || [];
+            if (!ids.length) return 0;
+            return ids.reduce((sum, id) => {
+                const s = this.allShifts.find(s => s.id == id);
+                return sum + (s ? (parseFloat(s.duration_min) || 0) - (parseFloat(s.break_min) || 0) : 0);
+            }, 0);
+        },
+
+        get schedCapacityLabel() {
+            const ids = this.schedModal.form.shift_ids || [];
+            const ct  = this.schedEffectiveCycleMin;
+            if (!ids.length || ct <= 0) return '';
+            const avail    = this.schedCombinedCapacityMin;
+            const dailyCap = Math.floor(avail / ct);
+            return dailyCap + ' units/day (' + Math.round(avail) + ' min combined)';
+        },
+
+        // Estimated days for the current plan_qty across all selected shifts
+        get schedEstDays() {
+            const qty = parseInt(this.schedModal.form.plan_qty) || 0;
+            const ct  = this.schedEffectiveCycleMin;
+            if (!qty || !this.schedModal.form.shift_ids.length || ct <= 0) return 0;
+            const perDay = Math.floor(this.schedCombinedCapacityMin / ct);
+            if (perDay <= 0) return 0;
+            return Math.ceil(qty / perDay);
+        },
+
+        // Remaining qty scoped to the selected process (or total if no process selected)
+        get schedActiveRemaining() {
+            if (!this.schedModal.qtySummary) return null;
+            const processId = this.schedModal.form.part_process_id;
+            if (!processId) return this.schedModal.qtySummary.remaining;
+            const proc      = this.schedModal.qtySummary.by_process.find(p => p.part_process_id == processId);
+            const scheduled = proc ? (proc.scheduled_qty || 0) : 0;
+            return Math.max(0, (this.schedModal.qtySummary.total_planned_qty || 0) - scheduled);
+        },
+
+        get schedPlanQtyError() {
+            const qty = parseInt(this.schedModal.form.plan_qty) || 0;
+            if (!qty || this.schedActiveRemaining === null) return null;
+            if (qty > this.schedActiveRemaining) {
+                return `Cannot plan ${qty.toLocaleString()} — only ${this.schedActiveRemaining.toLocaleString()} units remaining for this process.`;
+            }
+            return null;
+        },
+
+        // MM:SS formatter shared with schedule modal (mirrors routing builder)
+        toMMSS(decimalMinutes) {
+            const v = parseFloat(decimalMinutes);
+            if (isNaN(v) || v <= 0) return '0:00';
+            const mm = Math.floor(v);
+            const ss = Math.round((v - mm) * 60);
+            if (ss === 60) return (mm + 1) + ':00';
+            return mm + ':' + (ss < 10 ? '0' + ss : String(ss));
         },
 
         // ── Load orders ────────────────────────────────────────
@@ -653,6 +1221,171 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
             } catch (e) {
                 this.setFlash('error', 'Network error.');
             }
+        },
+
+        // ── Schedule Production ────────────────────────────────
+        // ── Week-off / Holiday helpers ───────────────────────────
+        isWeekOff(dateStr) {
+            if (!dateStr || !this.weekOffDays.length) return false;
+            // getDay() returns 0=Sun … 6=Sat, matching our weekOffDays convention
+            const d = new Date(dateStr + 'T00:00:00');
+            return this.weekOffDays.includes(d.getDay());
+        },
+
+        isHoliday(dateStr) {
+            if (!dateStr || !this.holidays.length) return false;
+            return this.holidays.some(h => h.date === dateStr);
+        },
+
+        isOffDay(dateStr) {
+            return this.isWeekOff(dateStr) || this.isHoliday(dateStr);
+        },
+
+        getOffDayReason(dateStr) {
+            const parts = [];
+            if (this.isWeekOff(dateStr)) {
+                const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                const d = new Date(dateStr + 'T00:00:00');
+                parts.push(days[d.getDay()] + ' is a week-off day');
+            }
+            const hol = this.holidays.find(h => h.date === dateStr);
+            if (hol) parts.push(`Public holiday: ${hol.name}`);
+            return parts.join(' · ');
+        },
+
+        openSchedule(wo) {
+            this.schedModal = {
+                open:        true,
+                saving:      false,
+                wo:          wo,
+                error:       null,
+                result:      null,
+                qtyLoading:    true,
+                qtySummary:    null,
+                showHistory:   false,
+                availChecking: false,
+                availability:  null,
+                form: {
+                    part_process_id:         '',
+                    machine_id:              '',
+                    shift_ids:               [],
+                    start_date:              new Date().toISOString().slice(0, 10),
+                    plan_qty:                wo.total_planned_qty ?? '',
+                    allow_week_off_holiday:  false,
+                },
+            };
+            // Fetch existing schedule history
+            fetch(`/api/v1/work-orders/${wo.id}/scheduled-qty`, { headers: this.headers })
+                .then(r => r.json())
+                .then(data => {
+                    this.schedModal.qtySummary  = data;
+                    this.schedModal.qtyLoading  = false;
+                    // Default plan_qty to remaining (if any scheduled already)
+                    // Default to total remaining (no process selected yet)
+                    if (data.remaining > 0 && data.total_scheduled > 0) {
+                        this.schedModal.form.plan_qty = data.remaining;
+                    }
+                })
+                .catch(() => { this.schedModal.qtyLoading = false; });
+        },
+
+        async saveSchedule() {
+            this.schedModal.saving = true;
+            this.schedModal.error  = null;
+            const payload = {
+                machine_id:              this.schedModal.form.machine_id,
+                shift_ids:               this.schedModal.form.shift_ids,
+                start_date:              this.schedModal.form.start_date,
+                part_process_id:         this.schedModal.form.part_process_id || null,
+                plan_qty:                parseInt(this.schedModal.form.plan_qty) || null,
+                allow_week_off_holiday:  this.schedModal.form.allow_week_off_holiday ? 1 : 0,
+            };
+            try {
+                const res  = await fetch(`/api/v1/work-orders/${this.schedModal.wo.id}/schedule`, {
+                    method:  'POST',
+                    headers: this.headers,
+                    body:    JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    this.schedModal.error = data.message ?? 'Scheduling failed.';
+                } else {
+                    this.schedModal.result = data;
+                }
+            } catch (e) {
+                this.schedModal.error = 'Network error. Please retry.';
+            } finally {
+                this.schedModal.saving = false;
+            }
+        },
+
+        // ── Machine availability check ─────────────────────────
+        // Called whenever machine, shift, start_date, or part_process changes.
+        // Requires machine + shift + date at minimum.
+        // Toggle a shift in/out of the selected shift_ids array, then re-check availability
+        toggleSchedShift(shiftId) {
+            const id  = parseInt(shiftId);
+            const idx = this.schedModal.form.shift_ids.indexOf(id);
+            if (idx === -1) {
+                this.schedModal.form.shift_ids.push(id);
+            } else {
+                this.schedModal.form.shift_ids.splice(idx, 1);
+            }
+            this.schedModal.availability = null;
+            this.checkMachineAvailability();
+        },
+
+        checkMachineAvailability() {
+            const machineId     = this.schedModal.form.machine_id;
+            const shiftIds      = this.schedModal.form.shift_ids || [];
+            const startDate     = this.schedModal.form.start_date;
+            const partProcessId = this.schedModal.form.part_process_id;
+
+            if (!machineId || !shiftIds.length || !startDate) {
+                this.schedModal.availability = null;
+                return;
+            }
+
+            this.schedModal.availChecking = true;
+            this.schedModal.availability  = null;
+
+            // Check all selected shifts in parallel; merge into a single result
+            const requests = shiftIds.map(sid => {
+                const p = new URLSearchParams({ machine_id: machineId, shift_id: sid, start_date: startDate });
+                if (partProcessId) p.set('part_process_id', partProcessId);
+                return fetch(`/api/v1/machine-availability?${p}`, { headers: this.headers }).then(r => r.json());
+            });
+
+            Promise.all(requests)
+                .then(results => {
+                    // Any shift with capacity → not fully blocked
+                    const anyFree    = results.some(r => !r.is_full);
+                    const allFull    = results.every(r => r.is_full);
+                    const totalFreeMin = results.reduce((s, r) => s + (r.free_min || 0), 0);
+                    const totalFreeQty = results.reduce((s, r) => s + (r.free_qty || 0), 0);
+
+                    // For next_available_date: latest date across all full shifts
+                    let nextDate = null;
+                    if (allFull) {
+                        const nextDates = results.map(r => r.next_available_date).filter(Boolean);
+                        nextDate = nextDates.sort().pop() ?? null; // latest
+                    }
+
+                    this.schedModal.availability = {
+                        date:                 startDate,
+                        machine_name:         results[0]?.machine_name ?? '',
+                        is_full:              allFull,
+                        used_min:             results.reduce((s, r) => s + (r.used_min || 0), 0),
+                        capacity_min:         results.reduce((s, r) => s + (r.capacity_min || 0), 0),
+                        free_min:             totalFreeMin,
+                        free_qty:             totalFreeQty,
+                        shift_results:        results,
+                        next_available_date:  nextDate,
+                        next_free_qty:        null,
+                    };
+                    this.schedModal.availChecking = false;
+                })
+                .catch(() => { this.schedModal.availChecking = false; });
         },
 
         // ── Helpers ────────────────────────────────────────────

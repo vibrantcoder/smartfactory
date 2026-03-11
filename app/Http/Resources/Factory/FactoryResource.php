@@ -22,13 +22,14 @@ class FactoryResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'          => $this->id,
-            'name'        => $this->name,
-            'code'        => $this->code,
-            'location'    => $this->location,
-            'timezone'    => $this->timezone,
-            'status'      => $this->status,
-            'is_active'   => $this->isActive(),
+            'id'            => $this->id,
+            'name'          => $this->name,
+            'code'          => $this->code,
+            'location'      => $this->location,
+            'timezone'      => $this->timezone,
+            'status'        => $this->status,
+            'is_active'     => $this->isActive(),
+            'week_off_days' => $this->week_off_days ?? [],
 
             // Counts — present only when withCount() was called
             'machine_count'        => $this->whenCounted('machines'),

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Production;
 
+use App\Domain\Factory\Models\Factory;
 use App\Domain\Production\Models\WorkOrder;
+use App\Domain\Production\Services\ProductionSchedulingService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WorkOrder\CreateWorkOrderRequest;
 use App\Http\Requests\Admin\WorkOrder\UpdateWorkOrderRequest;
@@ -24,6 +26,10 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class WorkOrderController extends Controller
 {
+    public function __construct(
+        private readonly ProductionSchedulingService $schedulingService,
+    ) {}
+
     // ── index ─────────────────────────────────────────────────
 
     public function index(Request $request): JsonResponse
@@ -156,6 +162,171 @@ class WorkOrderController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────
+
+    // ── scheduledQty ──────────────────────────────────────────
+
+    /**
+     * GET /api/v1/work-orders/{wo}/scheduled-qty
+     *
+     * Returns how many units are already scheduled for this WO,
+     * broken down by part_process_id. Used by the Schedule modal to
+     * show remaining qty and per-process history.
+     */
+    public function scheduledQty(WorkOrder $wo): JsonResponse
+    {
+        // Per process + date breakdown (one row per process × date)
+        $rows = \Illuminate\Support\Facades\DB::table('production_plans')
+            ->leftJoin('part_processes', 'part_processes.id', '=', 'production_plans.part_process_id')
+            ->leftJoin('process_masters', 'process_masters.id', '=', 'part_processes.process_master_id')
+            ->where('production_plans.work_order_id', $wo->id)
+            ->whereNotIn('production_plans.status', ['cancelled'])
+            ->groupBy(
+                'production_plans.part_process_id',
+                'part_processes.sequence_order',
+                'process_masters.name',
+                'production_plans.planned_date'
+            )
+            ->selectRaw("
+                production_plans.part_process_id,
+                part_processes.sequence_order,
+                process_masters.name AS process_name,
+                DATE_FORMAT(production_plans.planned_date, '%Y-%m-%d') AS planned_date,
+                SUM(production_plans.planned_qty) AS day_qty
+            ")
+            ->orderBy('part_processes.sequence_order')
+            ->orderBy('production_plans.planned_date')
+            ->get();
+
+        // Group into processes with nested date rows
+        $byProcess = $rows->groupBy('part_process_id')->map(function ($dateRows) use ($wo) {
+            $first = $dateRows->first();
+            return [
+                'part_process_id' => $first->part_process_id,
+                'sequence_order'  => $first->sequence_order,
+                'process_name'    => $first->process_name ?? '(no process)',
+                'scheduled_qty'   => (int) $dateRows->sum('day_qty'),
+                'dates'           => $dateRows->map(fn($r) => [
+                    'planned_date' => $r->planned_date,
+                    'planned_qty'  => (int) $r->day_qty,
+                ])->values(),
+            ];
+        })->sortBy('sequence_order')->values();
+
+        $totalScheduled = (int) $byProcess->sum('scheduled_qty');
+
+        return response()->json([
+            'total_planned_qty' => (int) $wo->total_planned_qty,
+            'total_scheduled'   => $totalScheduled,
+            'remaining'         => max(0, (int) $wo->total_planned_qty - $totalScheduled),
+            'by_process'        => $byProcess,
+        ]);
+    }
+
+    // ── schedule ──────────────────────────────────────────────
+
+    /**
+     * POST /api/v1/work-orders/{wo}/schedule
+     *
+     * Auto-schedule a confirmed/released work order across calendar days on a
+     * specific machine and shift. Uses ProductionSchedulingService to distribute
+     * the planned quantity respecting existing machine load (auto-rescheduling).
+     */
+    public function schedule(Request $request, WorkOrder $wo): JsonResponse
+    {
+        $data = $request->validate([
+            'machine_id'              => 'required|integer|exists:machines,id',
+            'shift_ids'               => 'required|array|min:1',
+            'shift_ids.*'             => 'integer|exists:shifts,id',
+            'start_date'              => 'required|date',
+            'part_process_id'         => 'nullable|integer|exists:part_processes,id',
+            'plan_qty'                => 'nullable|integer|min:1',
+            'allow_week_off_holiday'  => 'boolean',
+        ]);
+
+        if (!in_array($wo->status, ['confirmed', 'released', 'in_progress'], true)) {
+            return response()->json([
+                'message' => 'Work order must be confirmed or released before scheduling production.',
+            ], 422);
+        }
+
+        // ── Guard: remaining qty check (process-scoped when process given) ──
+        $partProcessId = isset($data['part_process_id']) ? (int) $data['part_process_id'] : null;
+
+        $scheduledQuery = \Illuminate\Support\Facades\DB::table('production_plans')
+            ->where('work_order_id', $wo->id)
+            ->whereNotIn('status', ['cancelled']);
+
+        if ($partProcessId !== null) {
+            $scheduledQuery->where('part_process_id', $partProcessId);
+        }
+
+        $alreadyScheduled = (int) $scheduledQuery->sum('planned_qty');
+        $remaining        = (int) $wo->total_planned_qty - $alreadyScheduled;
+
+        $scopeLabel = $partProcessId !== null ? "for this process" : "for this work order";
+
+        if ($remaining <= 0) {
+            return response()->json([
+                'message'          => "All {$wo->total_planned_qty} units are already scheduled {$scopeLabel}. Cancel existing plans to reschedule.",
+                'remaining'        => 0,
+                'part_process_id'  => $partProcessId,
+            ], 422);
+        }
+
+        if (isset($data['plan_qty']) && (int) $data['plan_qty'] > $remaining) {
+            return response()->json([
+                'message'         => "Plan qty ({$data['plan_qty']}) exceeds remaining qty ({$remaining}) {$scopeLabel}. Maximum allowed: {$remaining}.",
+                'remaining'       => $remaining,
+                'part_process_id' => $partProcessId,
+            ], 422);
+        }
+
+        $factoryId = $request->user()->factory_id ?? $wo->factory_id;
+
+        // Load factory calendar constraints
+        $factory      = Factory::find((int) $factoryId);
+        $weekOffDays  = $factory ? array_map('intval', $factory->week_off_days ?? []) : [];
+        $holidayDates = $factory
+            ? $factory->holidays()->pluck('holiday_date')
+                ->map(fn($d) => $d instanceof \Carbon\Carbon ? $d->format('Y-m-d') : (string) $d)
+                ->toArray()
+            : [];
+
+        try {
+            $plans = $this->schedulingService->schedule(
+                wo:                   $wo,
+                machineId:            (int) $data['machine_id'],
+                shiftIds:             array_map('intval', $data['shift_ids']),
+                startDate:            $data['start_date'],
+                factoryId:            (int) $factoryId,
+                partProcessId:        isset($data['part_process_id']) ? (int) $data['part_process_id'] : null,
+                planQty:              isset($data['plan_qty']) ? (int) $data['plan_qty'] : null,
+                weekOffDays:          $weekOffDays,
+                holidayDates:         $holidayDates,
+                allowWeekOffHoliday:  (bool) ($data['allow_week_off_holiday'] ?? false),
+            );
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $totalQty = array_sum(array_column(
+            array_map(fn($p) => ['qty' => $p->planned_qty], $plans),
+            'qty'
+        ));
+
+        return response()->json([
+            'message'    => count($plans) . ' production plan(s) created successfully.',
+            'plan_count' => count($plans),
+            'total_qty'  => $totalQty,
+            'from_date'  => $plans[0]->planned_date?->format('Y-m-d') ?? null,
+            'to_date'    => $plans[count($plans) - 1]->planned_date?->format('Y-m-d') ?? null,
+            'plans'      => array_map(fn($p) => [
+                'id'           => $p->id,
+                'planned_date' => $p->planned_date?->format('Y-m-d'),
+                'planned_qty'  => $p->planned_qty,
+            ], $plans),
+        ], 201);
+    }
 
     private function formatWo(WorkOrder $wo): array
     {

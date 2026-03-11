@@ -75,6 +75,10 @@
                                             class="rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors">
                                         Edit
                                     </button>
+                                    <button @click="openSettings(f)"
+                                            class="rounded-md bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors">
+                                        Settings
+                                    </button>
                                     <button x-show="f.status === 'active'"
                                             @click="deactivate(f)"
                                             class="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors">
@@ -101,9 +105,10 @@
 
     {{-- Create / Edit Modal --}}
     <div x-show="modal.open" style="display:none"
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-         @click.self="modal.open = false">
-        <div class="w-full max-w-lg rounded-xl bg-white shadow-2xl ring-1 ring-gray-200">
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="modal.open = false">
+        <div class="absolute inset-0 bg-black/40" @click="modal.open = false"></div>
+        <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-y-auto" style="max-height:92vh">
             <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                 <h3 class="text-sm font-semibold text-gray-800"
                     x-text="modal.mode === 'create' ? 'New Factory' : 'Edit Factory'"></h3>
@@ -180,6 +185,140 @@
         </div>
     </div>
 
+    {{-- Settings Modal (Week Off + Holidays) --}}
+    <div x-show="settingsModal.open" style="display:none"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="settingsModal.open = false">
+        <div class="absolute inset-0 bg-black/40" @click="settingsModal.open = false"></div>
+        <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl flex flex-col" style="max-height:92vh">
+
+            {{-- Header --}}
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4 flex-shrink-0">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-800">Factory Settings</h3>
+                    <p class="text-xs text-gray-400 mt-0.5" x-text="settingsModal.factory?.name"></p>
+                </div>
+                <button @click="settingsModal.open = false" class="rounded-md p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-6">
+
+                {{-- Week Off --}}
+                <div>
+                    <label class="text-xs font-semibold text-gray-700 block mb-1">Week Off Days</label>
+                    <p class="text-xs text-gray-400 mb-3">Click a day to toggle. Selected days (red) appear blocked on the Production Planning calendar.</p>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <template x-for="day in weekDayOptions" :key="day.value">
+                            <button type="button"
+                                    @click="toggleWeekOff(day.value)"
+                                    :class="isWeekOffSelected(day.value)
+                                        ? 'bg-red-100 text-red-700 ring-2 ring-red-400 font-semibold shadow-sm'
+                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
+                                    class="px-4 py-2 rounded-lg text-xs transition-colors select-none"
+                                    x-text="day.label">
+                            </button>
+                        </template>
+                    </div>
+                    {{-- inline feedback --}}
+                    <div x-show="settingsModal.weekOffMsg" style="display:none"
+                         class="mb-2 rounded-lg px-3 py-1.5 text-xs font-medium"
+                         :class="settingsModal.weekOffMsgType === 'success'
+                             ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+                             : 'bg-red-50 text-red-700 ring-1 ring-red-200'"
+                         x-text="settingsModal.weekOffMsg"></div>
+                    <button @click="saveWeekOff()" :disabled="settingsModal.savingWeekOff"
+                            style="background:#7c3aed;color:#fff;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:600;border:none;cursor:pointer;opacity:1;transition:opacity .15s"
+                            :style="settingsModal.savingWeekOff ? 'opacity:.6;cursor:not-allowed' : ''"
+                            x-text="settingsModal.savingWeekOff ? 'Saving…' : 'Save Week Off Days'">Save Week Off Days
+                    </button>
+                </div>
+
+                <hr class="border-gray-100">
+
+                {{-- Holidays --}}
+                <div>
+                    <label class="text-xs font-semibold text-gray-700 block mb-1">Public Holidays</label>
+                    <p class="text-xs text-gray-400 mb-3">Add dates with a label. These appear red on the Production Planning calendar.</p>
+
+                    {{-- Pending (new) rows --}}
+                    <div class="space-y-2 mb-3">
+                        <template x-for="(row, idx) in settingsModal.pendingRows" :key="idx">
+                            <div class="flex gap-2 items-center">
+                                <input x-model="row.date" type="date"
+                                       class="rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                <input x-model="row.name" type="text" placeholder="e.g. Republic Day"
+                                       class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                <button @click="settingsModal.pendingRows = settingsModal.pendingRows.filter((_, i) => i !== idx)"
+                                        x-show="settingsModal.pendingRows.length > 1"
+                                        class="rounded-lg p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+
+                    {{-- Action buttons --}}
+                    <div class="flex items-center gap-2 mb-3">
+                        <button @click="addMoreHolidayRow()"
+                                class="inline-flex items-center gap-1.5 rounded-lg border-2 border-dashed border-violet-300 px-4 py-2 text-xs font-medium text-violet-600 hover:bg-violet-50 hover:border-violet-400 transition-colors">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Add More
+                        </button>
+                        <button @click="savePendingHolidays()" :disabled="settingsModal.savingHolidays"
+                                style="background:#7c3aed;color:#fff;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:opacity .15s"
+                                :style="settingsModal.savingHolidays ? 'opacity:.6;cursor:not-allowed' : ''"
+                                x-text="settingsModal.savingHolidays ? 'Saving…' : 'Save Holidays'">Save Holidays
+                        </button>
+                    </div>
+
+                    {{-- Error / Success --}}
+                    <div x-show="settingsModal.holidayError" style="display:none"
+                         class="mb-2 rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs text-red-700"
+                         x-text="settingsModal.holidayError"></div>
+                    <div x-show="settingsModal.holidaySuccessMsg" style="display:none"
+                         class="mb-2 rounded-lg bg-green-50 border border-green-200 px-3 py-1.5 text-xs text-green-700"
+                         x-text="settingsModal.holidaySuccessMsg"></div>
+
+                    {{-- Saved Holiday List --}}
+                    <div class="rounded-lg border border-gray-100 overflow-hidden">
+                        <div x-show="settingsModal.loadingHolidays" class="px-4 py-6 text-center text-xs text-gray-400">Loading…</div>
+                        <div x-show="!settingsModal.loadingHolidays && settingsModal.holidays.length === 0"
+                             class="px-4 py-8 text-center text-xs text-gray-400">No holidays saved yet. Fill in the form above and click Save Holidays.</div>
+                        <template x-for="h in settingsModal.holidays" :key="h.id">
+                            <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 last:border-b-0 hover:bg-gray-50">
+                                <div class="flex items-center gap-3">
+                                    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono font-medium bg-red-50 text-red-700" x-text="h.holiday_date"></span>
+                                    <span class="text-xs text-gray-700" x-text="h.name"></span>
+                                </div>
+                                <button @click="removeHoliday(h)"
+                                        class="rounded p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end border-t border-gray-100 px-6 py-4 flex-shrink-0">
+                <button @click="settingsModal.open = false"
+                        class="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 @endsection
@@ -196,6 +335,27 @@ function factoryManager(apiToken) {
             error: null, errors: {},
             form: { name: '', code: '', location: '', timezone: 'UTC', status: 'active' },
         },
+
+        // Settings modal state
+        settingsModal: {
+            open: false, factory: null,
+            weekOff: [],        savingWeekOff: false,
+            weekOffMsg: '',     weekOffMsgType: 'success',
+            holidays: [],       loadingHolidays: false,
+            pendingRows: [{ date: '', name: '' }],
+            savingHolidays: false, holidayError: null,
+            holidaySuccessMsg: '',
+        },
+
+        weekDayOptions: [
+            { value: 0, label: 'Sunday' },
+            { value: 1, label: 'Monday' },
+            { value: 2, label: 'Tuesday' },
+            { value: 3, label: 'Wednesday' },
+            { value: 4, label: 'Thursday' },
+            { value: 5, label: 'Friday' },
+            { value: 6, label: 'Saturday' },
+        ],
 
         init() { this.load(); },
 
@@ -239,6 +399,133 @@ function factoryManager(apiToken) {
             this.modal.error   = null;
             this.modal.errors  = {};
             this.modal.form    = { name: f.name, code: f.code, location: f.location || '', timezone: f.timezone || 'UTC', status: f.status };
+        },
+
+        async openSettings(f) {
+            this.settingsModal.factory          = f;
+            this.settingsModal.open             = true;
+            this.settingsModal.weekOff          = (f.week_off_days || []).map(Number);
+            this.settingsModal.weekOffMsg       = '';
+            this.settingsModal.holidays         = [];
+            this.settingsModal.loadingHolidays  = true;
+            this.settingsModal.pendingRows      = [{ date: '', name: '' }];
+            this.settingsModal.holidayError     = null;
+            this.settingsModal.holidaySuccessMsg = '';
+
+            try {
+                const res  = await fetch(`/api/v1/factories/${f.id}/holidays`, { headers: this.authHeaders() });
+                const data = await res.json();
+                this.settingsModal.holidays = Array.isArray(data) ? data : [];
+            } catch {
+                this.settingsModal.holidays = [];
+            } finally {
+                this.settingsModal.loadingHolidays = false;
+            }
+        },
+
+        isWeekOffSelected(dayVal) {
+            return this.settingsModal.weekOff.includes(Number(dayVal));
+        },
+
+        toggleWeekOff(dayVal) {
+            const val = Number(dayVal);
+            const current = this.settingsModal.weekOff;
+            const idx = current.indexOf(val);
+            // Reassign array so Alpine detects the change reliably
+            if (idx === -1) {
+                this.settingsModal.weekOff = [...current, val];
+            } else {
+                this.settingsModal.weekOff = current.filter(v => v !== val);
+            }
+        },
+
+        showWeekOffMsg(type, msg) {
+            this.settingsModal.weekOffMsgType = type;
+            this.settingsModal.weekOffMsg = msg;
+            setTimeout(() => { this.settingsModal.weekOffMsg = ''; }, 3000);
+        },
+
+        async saveWeekOff() {
+            this.settingsModal.savingWeekOff = true;
+            this.settingsModal.weekOffMsg = '';
+            try {
+                const res = await fetch(`/api/v1/factories/${this.settingsModal.factory.id}/week-off`, {
+                    method: 'PATCH',
+                    headers: this.authHeaders(),
+                    body: JSON.stringify({ week_off_days: this.settingsModal.weekOff.map(Number) }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    const f = this.factories.find(f => f.id === this.settingsModal.factory.id);
+                    if (f) f.week_off_days = (data.week_off_days || []).map(Number);
+                    const days = (data.week_off_days || []).length;
+                    this.showWeekOffMsg('success', days ? `Saved! ${days} day(s) marked as week off.` : 'Saved — no week off days set.');
+                } else {
+                    this.showWeekOffMsg('error', data.message ?? 'Failed to save week-off days.');
+                }
+            } catch {
+                this.showWeekOffMsg('error', 'Network error. Please retry.');
+            } finally {
+                this.settingsModal.savingWeekOff = false;
+            }
+        },
+
+        addMoreHolidayRow() {
+            this.settingsModal.pendingRows.push({ date: '', name: '' });
+        },
+
+        async savePendingHolidays() {
+            this.settingsModal.holidayError = null;
+            this.settingsModal.holidaySuccessMsg = '';
+            const rows = this.settingsModal.pendingRows.filter(r => r.date && r.name.trim());
+            if (!rows.length) {
+                this.settingsModal.holidayError = 'Fill in at least one date and name before saving.';
+                return;
+            }
+            this.settingsModal.savingHolidays = true;
+            try {
+                const results = await Promise.all(rows.map(row =>
+                    fetch(`/api/v1/factories/${this.settingsModal.factory.id}/holidays`, {
+                        method: 'POST',
+                        headers: this.authHeaders(),
+                        body: JSON.stringify({ holiday_date: row.date, name: row.name.trim() }),
+                    }).then(r => r.json())
+                ));
+                // Merge into holidays list (reassign for Alpine reactivity)
+                let list = [...this.settingsModal.holidays];
+                results.forEach(data => {
+                    if (!data.id) return;
+                    const idx = list.findIndex(h => h.holiday_date === data.holiday_date);
+                    if (idx >= 0) list[idx] = data;
+                    else list.push(data);
+                });
+                list.sort((a, b) => a.holiday_date.localeCompare(b.holiday_date));
+                this.settingsModal.holidays = list;
+                this.settingsModal.pendingRows = [{ date: '', name: '' }];
+                this.settingsModal.holidaySuccessMsg = `${rows.length} holiday(s) saved successfully.`;
+                setTimeout(() => { this.settingsModal.holidaySuccessMsg = ''; }, 3000);
+            } catch {
+                this.settingsModal.holidayError = 'Network error. Please retry.';
+            } finally {
+                this.settingsModal.savingHolidays = false;
+            }
+        },
+
+        async removeHoliday(h) {
+            try {
+                const res = await fetch(`/api/v1/factories/${this.settingsModal.factory.id}/holidays/${h.id}`, {
+                    method: 'DELETE',
+                    headers: this.authHeaders(),
+                });
+                if (res.ok) {
+                    this.settingsModal.holidays = this.settingsModal.holidays.filter(x => x.id !== h.id);
+                } else {
+                    const data = await res.json();
+                    this.setFlash('error', data.message ?? 'Failed to remove holiday.');
+                }
+            } catch {
+                this.setFlash('error', 'Network error.');
+            }
         },
 
         async submitModal() {

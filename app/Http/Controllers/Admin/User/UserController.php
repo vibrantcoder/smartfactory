@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin\User;
 
 use App\Domain\Auth\Services\PermissionService;
+use App\Domain\Factory\Models\Factory;
 use App\Domain\Machine\Models\Machine;
 use App\Domain\Shared\Enums\Permission;
 use App\Domain\Shared\Enums\Role as RoleEnum;
@@ -67,7 +68,7 @@ class UserController extends Controller
             ]);
         }
 
-        $query = User::query()->with(['roles']);
+        $query = User::query();
 
         if (!$this->isSuperAdmin($authUser)) {
             $query->where('factory_id', $authUser->factory_id);
@@ -80,11 +81,24 @@ class UserController extends Controller
             ->orderBy('name')
             ->paginate(25);
 
+        // Load roles via raw query to bypass Spatie's team-scoped eager load.
+        // with(['roles']) filters by the current getPermissionsTeamId(), so factory-scoped
+        // roles (team_id=factory_id) are invisible when team context is 0 (super-admin).
+        $userIds = $users->pluck('id');
+        $roleMap = \Illuminate\Support\Facades\DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->whereIn('model_has_roles.model_id', $userIds)
+            ->where('model_has_roles.model_type', (new User)->getMorphClass())
+            ->select('model_has_roles.model_id as user_id', 'roles.name')
+            ->get()
+            ->keyBy('user_id');
+
         $assignerRoles = $this->permissionService->getAssignableRolesFor($authUser);
         $canCreate     = $authUser->can('create', User::class);
 
-        $users->through(function (User $user) use ($authUser, $assignerRoles) {
-            $userRole = $user->roles->first();
+        $users->through(function (User $user) use ($authUser, $assignerRoles, $roleMap) {
+            $userRoleRow = $roleMap->get($user->id);
+            $roleName    = $userRoleRow?->name;
             return [
                 'id'           => $user->id,
                 'name'         => $user->name,
@@ -92,8 +106,8 @@ class UserController extends Controller
                 'factory_id'   => $user->factory_id,
                 'machine_id'   => $user->machine_id,
                 'is_active'    => $user->is_active,
-                'role'         => $userRole?->name,
-                'role_label'   => $userRole ? RoleEnum::from($userRole->name)->label() : null,
+                'role'         => $roleName,
+                'role_label'   => $roleName ? (RoleEnum::tryFrom($roleName)?->label() ?? $roleName) : null,
                 'can_reassign' => $this->canReassign($authUser, $user, $assignerRoles),
                 'can_edit'     => $authUser->can('update', $user),
             ];
@@ -160,7 +174,7 @@ class UserController extends Controller
                 'factory_id'       => $user->factory_id,
                 'is_active'        => $user->is_active,
                 'role'             => $userRole?->name,
-                'role_label'       => $userRole ? RoleEnum::from($userRole->name)->label() : null,
+                'role_label'       => $userRole ? RoleEnum::tryFrom($userRole->name)?->label() ?? $userRole->name : null,
                 'assignable_roles' => array_map(
                     fn(RoleEnum $r) => ['value' => $r->value, 'label' => $r->label()],
                     $this->permissionService->getAssignableRolesFor($request->user())
@@ -208,7 +222,7 @@ class UserController extends Controller
                 'factory_id'   => $user->factory_id,
                 'is_active'    => $user->is_active,
                 'role'         => $userRole?->name,
-                'role_label'   => $userRole ? RoleEnum::from($userRole->name)->label() : null,
+                'role_label'   => $userRole ? RoleEnum::tryFrom($userRole->name)?->label() ?? $userRole->name : null,
                 'can_reassign' => true,
                 'can_edit'     => true,
             ],

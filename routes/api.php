@@ -6,8 +6,12 @@ use Illuminate\Support\Facades\Route;
 
 // ── Public: IoT Device Ingest ────────────────────────────────────────────────
 // No Sanctum auth — authenticated by X-Device-Token header or demo machine_id
-Route::post('iot/ingest',       [IotController::class, 'ingest'])->name('iot.ingest');
-Route::post('iot/ingest/batch', [IotController::class, 'ingestBatch'])->name('iot.ingest.batch');
+Route::post('iot/ingest',       [IotController::class, 'ingest'])
+    ->middleware('throttle:iot.ingest')
+    ->name('iot.ingest');
+Route::post('iot/ingest/batch', [IotController::class, 'ingestBatch'])
+    ->middleware('throttle:iot.batch')
+    ->name('iot.ingest.batch');
 
 // ── Public: Auth ─────────────────────────────────────────────────────────────
 Route::prefix('v1/auth')->name('v1.auth.')->group(function () {

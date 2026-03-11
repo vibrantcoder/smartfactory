@@ -21,7 +21,10 @@ use App\Policies\ProcessMasterPolicy;
 use App\Policies\ProductionPlanPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\WorkOrderPolicy;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -81,6 +84,7 @@ class AppServiceProvider extends ServiceProvider
         $this->registerPolicies();
         $this->registerSuperAdminBypass();
         $this->registerCustomGates();
+        $this->registerIotRateLimiters();
     }
 
     // ─────────────────────────────────────────────────────────
@@ -149,6 +153,62 @@ class AppServiceProvider extends ServiceProvider
 
             return false;
         });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // IoT Rate Limiters
+    // ─────────────────────────────────────────────────────────
+
+    /**
+     * Register per-machine rate limiters for IoT ingest endpoints.
+     *
+     * Each machine gets its own bucket keyed by device token hash, machine_id,
+     * or IP — so a factory with 50 machines each gets independent limits and
+     * one misbehaving source cannot starve the others.
+     *
+     * Limits:
+     *   iot.ingest : 65 req/min per machine (~1/sec with a 5-second jitter buffer)
+     *   iot.batch  : 10 req/min per machine (one batch every 6 seconds is ample)
+     */
+    private function registerIotRateLimiters(): void
+    {
+        // Single record ingest
+        RateLimiter::for('iot.ingest', function (Request $request): Limit {
+            $key = $this->iotRateLimitKey($request, $request->json()->all());
+
+            return Limit::perMinute(65)->by($key);
+        });
+
+        // Batch ingest (up to 500 records per request)
+        RateLimiter::for('iot.batch', function (Request $request): Limit {
+            $payloads   = $request->json()->all();
+            $firstEntry = is_array($payloads) && isset($payloads[0]) ? $payloads[0] : [];
+            $key        = $this->iotRateLimitKey($request, $firstEntry);
+
+            return Limit::perMinute(10)->by($key);
+        });
+    }
+
+    /**
+     * Derive a stable, per-machine rate-limit cache key from the request.
+     *
+     * Priority:
+     *   1. X-Device-Token header  — SHA-256 hash, same as what the controller uses
+     *   2. machine_id in payload  — demo / gateway mode
+     *   3. Client IP              — last-resort fallback
+     */
+    private function iotRateLimitKey(Request $request, array $payload): string
+    {
+        $token = $request->header('X-Device-Token');
+        if ($token !== null && $token !== '') {
+            return 'iot:token:' . hash('sha256', $token);
+        }
+
+        if (!empty($payload['machine_id'])) {
+            return 'iot:machine:' . (int) $payload['machine_id'];
+        }
+
+        return 'iot:ip:' . $request->ip();
     }
 
     // ─────────────────────────────────────────────────────────

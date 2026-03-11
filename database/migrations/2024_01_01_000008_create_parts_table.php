@@ -14,7 +14,6 @@ return new class extends Migration
             $table->foreignId('customer_id')->nullable()->constrained()->nullOnDelete();
             $table->string('part_number', 50)->unique();
             $table->string('name');
-            $table->string('revision', 10)->nullable();
             $table->decimal('cycle_time_std', 10, 4)->nullable();   // seconds (for OEE)
             $table->decimal('total_cycle_time', 10, 4)->default(0); // minutes (sum of routing)
             $table->string('status', 20)->default('active'); // active|discontinued

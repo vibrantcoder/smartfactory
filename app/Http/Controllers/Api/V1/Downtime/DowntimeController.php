@@ -13,11 +13,12 @@ class DowntimeController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $rows = DB::table('downtimes')
-            ->where('factory_id', $request->user()->factory_id)
+        $query = DB::table('downtimes')
+            ->when($request->user()->factory_id, fn($q, $fid) => $q->where('factory_id', $fid))
             ->when($request->machine_id, fn($q) => $q->where('machine_id', $request->machine_id))
-            ->orderByDesc('started_at')
-            ->paginate($request->integer('per_page', 20));
+            ->orderByDesc('started_at');
+
+        $rows = $query->paginate($request->integer('per_page', 20));
 
         return response()->json($rows);
     }
@@ -33,7 +34,13 @@ class DowntimeController extends Controller
             'description'         => 'nullable|string',
         ]);
 
-        $data['factory_id'] = $request->user()->factory_id;
+        // Super-admin has no factory_id; resolve from the machine instead.
+        $data['factory_id'] = $request->user()->factory_id
+            ?? DB::table('machines')->where('id', $data['machine_id'])->value('factory_id');
+
+        if ($data['factory_id'] === null) {
+            return response()->json(['message' => 'Could not determine factory for this machine.'], 422);
+        }
 
         if (isset($data['ended_at'])) {
             $start = \Carbon\Carbon::parse($data['started_at']);

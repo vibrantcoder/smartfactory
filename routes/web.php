@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\Dashboard\DashboardController;
+use App\Http\Controllers\Admin\Factory\FactoryAdminController;
 use App\Http\Controllers\Admin\Iot\IotDashboardController;
 use App\Http\Controllers\Admin\Downtime\DowntimeController as AdminDowntimeController;
 use App\Http\Controllers\Admin\Employee\EmployeeController as AdminEmployeeController;
@@ -37,6 +38,11 @@ Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+        // Factories (super-admin only)
+        Route::prefix('factories')->name('factories.')->group(function () {
+            Route::get('/', [FactoryAdminController::class, 'index'])->name('index');
+        });
 
         // Users
         Route::prefix('users')->name('users.')->group(function () {

@@ -275,13 +275,7 @@
                                           class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm
                                                  focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"></textarea>
                             </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">Std Cycle Time (min)</label>
-                                <input x-model="form.cycle_time_std" type="number" step="0.01" min="0"
-                                       placeholder="0.00"
-                                       class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm
-                                              focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
-                            </div>
+                            {{-- Cycle time shown only after routing is defined (edit flow) --}}
                         </div>
                         <template x-if="formError">
                             <p class="text-xs text-red-600" x-text="formError"></p>
@@ -359,11 +353,14 @@
                                           class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm
                                                  focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"></textarea>
                             </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">Std Cycle Time (min)</label>
-                                <input x-model="form.cycle_time_std" type="number" step="0.01" min="0"
-                                       class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm
-                                              focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                            <div x-show="editTarget?.total_cycle_time > 0" class="col-span-2">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Std Cycle Time (from Routing)</label>
+                                <input x-model="form.cycle_time_std" type="number" step="0.01" min="0" readonly
+                                       class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
+                                <p class="mt-1 text-xs text-indigo-500">
+                                    Auto-calculated from process routing
+                                    (<span x-text="(editTarget?.processes_count ?? editTarget?.process_count ?? 0) + ' steps'"></span>)
+                                </p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
@@ -756,13 +753,17 @@ function partsPage(apiToken, factoryId, factories) {
         // ── Edit
         openEdit(p) {
             this.editTarget = p;
+            // Auto-populate cycle_time_std from routing total when routing exists
+            const cycleTime = (p.total_cycle_time > 0)
+                ? p.total_cycle_time
+                : (p.cycle_time_std ?? '');
             this.form = {
                 customer_id:    p.customer?.id ?? '',
                 part_number:    p.part_number,
                 name:           p.name,
                 description:    p.description ?? '',
                 unit:           p.unit || 'pcs',
-                cycle_time_std: p.cycle_time_std ?? '',
+                cycle_time_std: cycleTime,
                 status:         p.status,
             };
             this.formError = null;

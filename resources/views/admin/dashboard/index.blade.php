@@ -18,7 +18,7 @@
 
 @section('header-actions')
     {{-- Super-admin: factory selector --}}
-    @if($factories->count() > 1)
+    @if($factories->count())
     <form method="GET" action="{{ route('admin.dashboard') }}" class="flex items-center gap-2">
         <label for="factory-select" class="text-sm text-gray-500">Factory:</label>
         <select id="factory-select" name="factory_id" onchange="this.form.submit()"

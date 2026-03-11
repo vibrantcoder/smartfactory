@@ -60,7 +60,7 @@ class EloquentProcessMasterRepository implements ProcessMasterRepositoryInterfac
             ->ordered()
             ->select([
                 'id', 'name', 'code',
-                'standard_time', 'machine_type_default', 'description',
+                'machine_type_default', 'description',
             ])
             ->get();
     }

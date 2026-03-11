@@ -8,12 +8,15 @@ use App\Domain\Factory\Models\Factory;
 use App\Domain\Machine\Models\Machine;
 use App\Domain\Production\Models\Part;
 use App\Domain\Production\Models\Shift;
+use App\Http\Controllers\Concerns\ResolvesFactory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ProductionPlanController extends Controller
 {
+    use ResolvesFactory;
+
     public function index(Request $request): View
     {
         $user = $request->user();

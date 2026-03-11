@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin\Production;
 
-use App\Domain\Factory\Models\Factory;
 use App\Domain\Production\Models\Shift;
+use App\Http\Controllers\Concerns\ResolvesFactory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,19 +13,14 @@ use Illuminate\View\View;
 
 class ShiftController extends Controller
 {
+    use ResolvesFactory;
+
     public function index(Request $request): View
     {
-        $user      = $request->user();
-        $factoryId = $user->factory_id ?? ($request->filled('factory_id') ? $request->integer('factory_id') : null);
+        $user = $request->user();
 
-        $factories = $user->factory_id === null
-            ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])
-            : collect();
-
-        // Super-admin with no factory param → default to first factory
-        if ($factoryId === null && $factories->isNotEmpty()) {
-            $factoryId = $factories->first()->id;
-        }
+        ['factoryId' => $factoryId, 'factories' => $factories] =
+            $this->resolveFactories($user, $request->integer('factory_id') ?: null);
 
         $shifts = $factoryId
             ? Shift::forFactory($factoryId)->orderBy('start_time')->get()

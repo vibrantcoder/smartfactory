@@ -64,7 +64,10 @@ class WorkOrderController extends Controller
             ->orderBy('expected_delivery_date')
             ->paginate($request->integer('per_page', 25));
 
-        return response()->json($orders);
+        return response()->json([
+            ...$orders->toArray(),
+            'data' => $orders->getCollection()->map(fn($wo) => $this->formatWo($wo))->values(),
+        ]);
     }
 
     // ── store ─────────────────────────────────────────────────

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin\User;
 
 use App\Domain\Auth\Services\PermissionService;
-use App\Domain\Factory\Models\Factory;
 use App\Domain\Machine\Models\Machine;
 use App\Domain\Shared\Enums\Permission;
 use App\Domain\Shared\Enums\Role as RoleEnum;
+use App\Http\Controllers\Concerns\ResolvesFactory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\User\AssignRoleRequest;
 use App\Http\Requests\Admin\User\CreateUserRequest;
@@ -33,6 +33,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class UserController extends Controller
 {
+    use ResolvesFactory;
+
     public function __construct(
         private readonly PermissionService   $permissionService,
         private readonly PermissionRegistrar $registrar
@@ -47,9 +49,7 @@ class UserController extends Controller
         $authUser = $request->user();
 
         if (! $request->expectsJson()) {
-            $factories = $authUser->factory_id === null
-                ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])
-                : collect();
+            ['factoryId' => $_, 'factories' => $factories] = $this->resolveFactories($authUser);
 
             $permGroups = collect(Permission::groupedMatrix())->map(fn ($group) => [
                 'label'       => $group['label'],

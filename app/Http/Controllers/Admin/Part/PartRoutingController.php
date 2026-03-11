@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin\Part;
 
-use App\Domain\Factory\Models\Factory;
 use App\Domain\Production\Models\Part;
 use App\Domain\Production\Services\ProcessMasterService;
+use App\Http\Controllers\Concerns\ResolvesFactory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -29,6 +29,8 @@ use Illuminate\View\View;
  */
 class PartRoutingController extends Controller
 {
+    use ResolvesFactory;
+
     public function __construct(
         private readonly ProcessMasterService $processMasterService,
     ) {}
@@ -37,14 +39,13 @@ class PartRoutingController extends Controller
     {
         $this->authorize('viewAny', Part::class);
 
-        $user      = $request->user();
-        $factories = $user->factory_id === null
-            ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])
-            : collect();
+        $user = $request->user();
+
+        ['factoryId' => $factoryId, 'factories' => $factories] = $this->resolveFactories($user);
 
         return view('admin.parts.index', [
             'apiToken'  => session('api_token'),
-            'factoryId' => $user->factory_id,
+            'factoryId' => $factoryId,
             'factories' => $factories,
         ]);
     }
@@ -67,7 +68,7 @@ class PartRoutingController extends Controller
             'process_master_name'  => $p->processMaster?->name ?? '',
             'process_master_code'  => $p->processMaster?->code ?? '',
             'machine_type_default' => $p->processMaster?->machine_type_default,
-            'default_cycle_time'   => (float) ($p->processMaster?->standard_time ?? 0),
+            'default_cycle_time'   => null,
             'standard_cycle_time'  => $p->standard_cycle_time ? (float) $p->standard_cycle_time : null,
             'setup_time'           => $p->setup_time ? (float) $p->setup_time : null,
             'process_type'         => $p->process_type ?? 'inhouse',
@@ -81,7 +82,6 @@ class PartRoutingController extends Controller
             'id'                   => $pm->id,
             'name'                 => $pm->name,
             'code'                 => $pm->code,
-            'standard_time'        => (float) ($pm->standard_time ?? 0),
             'machine_type_default' => $pm->machine_type_default,
             'description'          => $pm->description,
         ])->values()->all();

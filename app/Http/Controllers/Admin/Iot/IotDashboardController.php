@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin\Iot;
 
-use App\Domain\Factory\Models\Factory;
 use App\Domain\Machine\Models\IotLog;
 use App\Domain\Machine\Models\Machine;
 use App\Domain\Production\Models\Shift;
+use App\Http\Controllers\Concerns\ResolvesFactory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,16 +22,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class IotDashboardController extends Controller
 {
+    use ResolvesFactory;
+
     public function index(Request $request): View
     {
-        $user      = $request->user();
-        $factories = $user->factory_id === null
-            ? Factory::where('status', 'active')->orderBy('name')->get(['id', 'name'])
-            : collect();
+        $user = $request->user();
+
+        ['factoryId' => $factoryId, 'factories' => $factories] = $this->resolveFactories($user);
 
         return view('admin.iot.dashboard', [
             'apiToken'  => session('api_token'),
-            'factoryId' => $user->factory_id,
+            'factoryId' => $factoryId,
             'factories' => $factories,
         ]);
     }

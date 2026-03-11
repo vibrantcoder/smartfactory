@@ -101,12 +101,6 @@
                             <template x-if="pm.machineType">
                                 <span class="rounded bg-gray-100 px-1" x-text="pm.machineType"></span>
                             </template>
-                            <template x-if="pm.standardTime > 0">
-                                <span x-text="`${pm.standardTime} min`"></span>
-                            </template>
-                            <template x-if="pm.standardTime === 0">
-                                <span class="italic">no default time</span>
-                            </template>
                         </div>
                     </li>
                 </template>
@@ -195,7 +189,7 @@
                     {{-- Server-confirmed preview result --}}
                     <template x-if="previewResult">
                         <div class="rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
-                            ✓ Server: <strong x-text="`${previewResult.total_cycle_time} min`"></strong>
+                            ✓ Server: <strong x-text="toMMSS(previewResult.total_cycle_time)"></strong>
                         </div>
                     </template>
                 </div>
@@ -284,27 +278,16 @@
                             {{-- Cycle time row --}}
                             <div class="mt-2 flex items-center gap-4 flex-wrap">
 
-                                {{-- Default time (read-only) --}}
-                                <div class="text-xs text-gray-500">
-                                    Default:
-                                    <span
-                                        class="font-mono"
-                                        x-text="step.defaultCycleTime > 0 ? `${step.defaultCycleTime} min` : 'not set'"
-                                    ></span>
-                                </div>
-
-                                {{-- Override field --}}
+                                {{-- Override field (MM:SS) --}}
                                 <div class="flex items-center gap-1.5">
-                                    <label class="text-xs text-gray-500" :for="`override-${index}`">Override (min):</label>
+                                    <label class="text-xs text-gray-500" :for="`override-${index}`">Cycle (MM:SS):</label>
                                     <input
                                         :id="`override-${index}`"
-                                        x-model="step.overrideCycleTime"
-                                        @input="previewResult = null"
-                                        type="number"
-                                        min="0.01"
-                                        step="0.5"
-                                        placeholder="Use default"
-                                        class="w-28 rounded border border-gray-200 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                                        :value="step.overrideCycleTime !== '' ? toMMSS(step.overrideCycleTime) : ''"
+                                        @change="step.overrideCycleTime = parseMMSS($event.target.value); previewResult = null; $event.target.value = step.overrideCycleTime !== '' ? toMMSS(step.overrideCycleTime) : ''"
+                                        type="text"
+                                        placeholder="MM:SS"
+                                        class="w-24 rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                                         :class="{ 'border-amber-400 bg-amber-50': hasOverride(step) }"
                                     >
                                     <button
@@ -321,7 +304,7 @@
                                     <span
                                         class="ml-1 font-mono"
                                         :class="hasOverride(step) ? 'text-amber-600' : 'text-gray-700'"
-                                        x-text="`${effectiveCycleTime(step)} min`"
+                                        x-text="toMMSS(effectiveCycleTime(step))"
                                     ></span>
                                     <span x-show="hasOverride(step)" class="ml-1 text-amber-500 text-xs">↑ overridden</span>
                                 </div>
@@ -330,17 +313,16 @@
                             {{-- Setup time + Process type row --}}
                             <div class="mt-2 flex items-center gap-4 flex-wrap">
 
-                                {{-- Setup time --}}
+                                {{-- Setup time (MM:SS) --}}
                                 <div class="flex items-center gap-1.5">
-                                    <label class="text-xs text-gray-500" :for="`setup-${index}`">Setup (min):</label>
+                                    <label class="text-xs text-gray-500" :for="`setup-${index}`">Setup (MM:SS):</label>
                                     <input
                                         :id="`setup-${index}`"
-                                        x-model="step.setupTime"
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        placeholder="0"
-                                        class="w-20 rounded border border-gray-200 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                                        :value="step.setupTime !== '' && step.setupTime != null ? toMMSS(step.setupTime) : ''"
+                                        @change="step.setupTime = parseMMSS($event.target.value); $event.target.value = step.setupTime !== '' ? toMMSS(step.setupTime) : ''"
+                                        type="text"
+                                        placeholder="MM:SS"
+                                        class="w-20 rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                                     >
                                 </div>
 
@@ -402,7 +384,7 @@
                             <span>Cycle time/part:</span>
                             <span class="font-semibold text-sm text-gray-800" x-text="totalCycleTimeFormatted"></span>
                             <template x-if="previewResult">
-                                <span class="text-green-600">(server: <span x-text="`${previewResult.total_cycle_time} min`"></span>)</span>
+                                <span class="text-green-600">(server: <span x-text="toMMSS(previewResult.total_cycle_time)"></span>)</span>
                             </template>
                         </div>
                     </div>
@@ -415,13 +397,13 @@
 
                                 {{-- Setup block --}}
                                 <span class="rounded bg-amber-100 px-2 py-0.5 text-amber-800 font-mono">
-                                    Setup <span x-text="totalSetupTime.toFixed(1)"></span> min
+                                    Setup <span x-text="toMMSS(totalSetupTime)"></span>
                                 </span>
                                 <span class="text-gray-400">+</span>
 
                                 {{-- Qty × cycle --}}
                                 <span class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 font-mono">
-                                    Qty × <span x-text="totalCycleTime.toFixed(2)"></span> min
+                                    Qty × <span x-text="toMMSS(totalCycleTime)"></span>
                                 </span>
                                 <span class="text-gray-400">=</span>
 
@@ -437,7 +419,7 @@
                                     Ideal: <span x-text="idealPerShift"></span> pcs / shift
                                 </span>
                                 <span class="text-gray-400 text-xs">
-                                    (<span x-text="firstPartTime.toFixed(1)"></span> min to first part)
+                                    (<span x-text="toMMSS(firstPartTime)"></span> to first part)
                                 </span>
                             </div>
                         </div>
@@ -468,7 +450,6 @@ function routingBuilder(config) {
                 processMasterName:   s.process_master_name ?? '',
                 processMasterCode:   s.process_master_code ?? '',
                 machineTypeDefault:  s.machine_type_default ?? null,
-                defaultCycleTime:    parseFloat(s.default_cycle_time ?? 0),
                 overrideCycleTime:   s.standard_cycle_time != null ? String(s.standard_cycle_time) : '',
                 setupTime:           s.setup_time != null ? String(s.setup_time) : '',
                 processType:         s.process_type ?? 'inhouse',
@@ -483,7 +464,6 @@ function routingBuilder(config) {
                 id:          pm.id,
                 name:        pm.name,
                 code:        pm.code,
-                standardTime: parseFloat(pm.standard_time ?? 0),
                 machineType: pm.machine_type_default ?? null,
                 description: pm.description ?? null,
             };
@@ -504,17 +484,13 @@ function routingBuilder(config) {
         get totalCycleTime() {
             return this.steps.reduce(function(sum, step) {
                 var override = parseFloat(step.overrideCycleTime);
-                var minutes  = (!isNaN(override) && step.overrideCycleTime !== '')
-                    ? override : step.defaultCycleTime;
-                return sum + (isNaN(minutes) ? 0 : minutes);
+                var minutes  = (!isNaN(override) && step.overrideCycleTime !== '') ? override : 0;
+                return sum + minutes;
             }, 0);
         },
 
         get totalCycleTimeFormatted() {
-            var t = this.totalCycleTime;
-            var h = Math.floor(t / 60);
-            var m = (t % 60).toFixed(1);
-            return h > 0 ? (h + 'h ' + m + 'min') : (m + ' min');
+            return this.toMMSS(this.totalCycleTime);
         },
 
         // Sum of one-time setup times across all steps
@@ -526,8 +502,7 @@ function routingBuilder(config) {
         },
 
         get totalSetupTimeFormatted() {
-            var t = this.totalSetupTime;
-            return t > 0 ? t.toFixed(1) + ' min' : '0 min';
+            return this.toMMSS(this.totalSetupTime);
         },
 
         // First-part lead time = setup (once) + one cycle
@@ -556,14 +531,41 @@ function routingBuilder(config) {
             });
         },
 
+        // ── MM:SS helpers ─────────────────────────────────────
+
+        // Convert decimal minutes → "MM:SS" string  (e.g. 1.5 → "1:30")
+        toMMSS(decimalMinutes) {
+            var v = parseFloat(decimalMinutes);
+            if (isNaN(v) || v <= 0) return '0:00';
+            var mm = Math.floor(v);
+            var ss = Math.round((v - mm) * 60);
+            if (ss === 60) { mm++; ss = 0; }
+            return mm + ':' + (ss < 10 ? '0' + ss : String(ss));
+        },
+
+        // Parse "MM:SS" or plain decimal string → decimal minutes (or '' if empty)
+        parseMMSS(str) {
+            if (!str || String(str).trim() === '') return '';
+            str = String(str).trim();
+            if (str.indexOf(':') !== -1) {
+                var parts = str.split(':');
+                var mm = parseInt(parts[0] || '0', 10);
+                var ss = parseInt(parts[1] || '0', 10);
+                if (isNaN(mm) || isNaN(ss)) return '';
+                return mm + ss / 60;
+            }
+            var v = parseFloat(str);
+            return isNaN(v) ? '' : v;
+        },
+
         hasOverride(step) {
             var v = parseFloat(step.overrideCycleTime);
-            return !isNaN(v) && step.overrideCycleTime !== '' && v !== step.defaultCycleTime;
+            return !isNaN(v) && step.overrideCycleTime !== '';
         },
 
         effectiveCycleTime(step) {
             var v = parseFloat(step.overrideCycleTime);
-            return (!isNaN(v) && step.overrideCycleTime !== '') ? v : step.defaultCycleTime;
+            return (!isNaN(v) && step.overrideCycleTime !== '') ? v : 0;
         },
 
         init() {
@@ -608,7 +610,6 @@ function routingBuilder(config) {
                         id:          pm.id,
                         name:        pm.name,
                         code:        pm.code,
-                        standardTime: parseFloat(pm.standard_time ?? 0),
                         machineType: pm.machine_type_default ?? null,
                         description: pm.description ?? null,
                     };
@@ -627,7 +628,6 @@ function routingBuilder(config) {
                 processMasterName:   pm.name,
                 processMasterCode:   pm.code,
                 machineTypeDefault:  pm.machineType,
-                defaultCycleTime:    pm.standardTime,
                 overrideCycleTime:   '',
                 setupTime:           '',
                 processType:         'inhouse',
@@ -702,7 +702,6 @@ function routingBuilder(config) {
                             processMasterName:   p.process_master?.name ?? '',
                             processMasterCode:   p.process_master?.code ?? '',
                             machineTypeDefault:  p.process_master?.machine_type_default ?? null,
-                            defaultCycleTime:    parseFloat(p.process_master?.standard_time ?? 0),
                             overrideCycleTime:   p.standard_cycle_time != null ? String(p.standard_cycle_time) : '',
                             setupTime:           p.setup_time != null ? String(p.setup_time) : '',
                             processType:         p.process_type ?? 'inhouse',

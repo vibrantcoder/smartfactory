@@ -5,10 +5,11 @@
 @section('content')
 
 @php
-    $isSuperAdmin  = $factoryId === null;
-    $factoriesJson = $factories->isNotEmpty() ? $factories->toJson() : '[]';
-    $customersJson = $customers->toJson();
-    $partsJson     = $parts->toJson();
+    $hasMultiFactory = $factories->isNotEmpty();
+    $isSuperAdmin    = $factoryId === null;
+    $factoriesJson   = $hasMultiFactory ? $factories->toJson() : '[]';
+    $customersJson   = $customers->toJson();
+    $partsJson       = $parts->toJson();
 @endphp
 
 <div x-data="workOrderManager(
@@ -37,8 +38,8 @@
                 <p class="text-xs text-gray-400 mt-0.5"><span x-text="pagination.total ?? '…'"></span> orders</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                {{-- Factory selector (super-admin) --}}
-                @if($isSuperAdmin)
+                {{-- Factory selector (only when multiple factories exist) --}}
+                @if($hasMultiFactory)
                 <select x-model="currentFactoryId" @change="loadOrders(1)"
                         class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 focus:border-indigo-400 focus:outline-none">
                     <option value="">All Factories</option>
@@ -229,10 +230,10 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">Customer *</label>
                             <select x-model="modal.form.customer_id" @change="onCustomerChange()"
-                                    :disabled="!modal.form.factory_id && !currentFactoryId"
+                                    :disabled="isSuperAdmin && !modal.form.factory_id && !currentFactoryId"
                                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400"
                                     :class="modal.errors.customer_id ? 'border-red-400' : ''">
-                                <option value="" x-text="(!modal.form.factory_id && !currentFactoryId) ? '— Select a factory first —' : '— Select customer —'"></option>
+                                <option value="">— Select customer —</option>
                                 <template x-for="c in filteredCustomers" :key="c.id">
                                     <option :value="c.id" x-text="c.name + ' (' + c.code + ')'"></option>
                                 </template>
@@ -332,7 +333,7 @@
                                 <option value="cancelled">Cancelled</option>
                             </select>
                         </div>
-                        @if($isSuperAdmin)
+                        @if($hasMultiFactory)
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">Factory *</label>
                             <select x-model="modal.form.factory_id" @change="onFactoryChange()"
@@ -415,6 +416,7 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
         pagination: {},
         loading:    false,
         flash:      { type: '', message: '' },
+        isSuperAdmin: isSuperAdmin,
         factories:  factories || [],
         allCustomers: allCustomers || [],
         allParts:   allParts || [],
@@ -453,8 +455,10 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
 
         // ── Derived data ───────────────────────────────────────
         get filteredCustomers() {
+            // Factory-scoped users: PHP FactoryScope already filters — return as-is
+            if (!this.isSuperAdmin) return this.allCustomers;
+            // Super-admin: filter by whichever factory is selected in the modal (or filter bar)
             const fid = this.modal.form.factory_id || this.currentFactoryId;
-            // Super-admin must pick a factory first; factory-scoped users see their own
             if (!fid) return [];
             return this.allCustomers.filter(c => c.factory_id == fid);
         },
@@ -524,23 +528,36 @@ function workOrderManager(apiToken, isSuperAdmin, factoryId, factories, allCusto
 
         // ── Open edit ──────────────────────────────────────────
         openEdit(wo) {
-            const selectedPart = this.allParts.find(p => p.id == wo.part_id) || null;
+            const customerId   = wo.customer_id;
+            const partId       = wo.part_id;
+            const selectedPart = this.allParts.find(p => p.id == partId) || null;
+
+            // Open modal with blank customer/part so x-for renders options first
             this.modal = {
                 open: true, mode: 'edit', saving: false, wo, error: null, errors: {},
                 selectedPart,
                 form: {
-                    factory_id:              wo.factory_id,
-                    customer_id:             wo.customer_id,
-                    part_id:                 wo.part_id,
-                    order_qty:               wo.order_qty,
-                    excess_qty:              wo.excess_qty,
-                    expected_delivery_date:  wo.expected_delivery_date,
-                    planned_start_date:      wo.planned_start_date || '',
-                    priority:                wo.priority,
-                    status:                  wo.status,
-                    notes:                   wo.notes || '',
+                    factory_id:             wo.factory_id,
+                    customer_id:            '',
+                    part_id:                '',
+                    order_qty:              wo.order_qty,
+                    excess_qty:             wo.excess_qty,
+                    expected_delivery_date: wo.expected_delivery_date,
+                    planned_start_date:     wo.planned_start_date || '',
+                    priority:               wo.priority,
+                    status:                 wo.status,
+                    notes:                  wo.notes || '',
                 },
             };
+
+            // After x-if inserts template and x-for renders customer options, set customer_id
+            Alpine.nextTick(() => {
+                this.modal.form.customer_id = customerId;
+                // After customer options selected and partsForCustomer populates, set part_id
+                Alpine.nextTick(() => {
+                    this.modal.form.part_id = partId;
+                });
+            });
         },
 
         // ── Event handlers ─────────────────────────────────────

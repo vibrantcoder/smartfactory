@@ -122,10 +122,10 @@
                                     x-text="p.total_cycle_time ? p.total_cycle_time + ' min' : '—'"></td>
                                 <td class="px-5 py-3 text-center">
                                     <span class="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                                          :class="(p.process_count ?? 0) > 0
+                                          :class="(p.processes_count ?? 0) > 0
                                               ? 'bg-green-100 text-green-800'
                                               : 'bg-gray-100 text-gray-500'"
-                                          x-text="(p.process_count ?? 0) + ' steps'"></span>
+                                          x-text="(p.processes_count ?? 0) + ' steps'"></span>
                                 </td>
                                 {{-- Files / Drawings --}}
                                 <td class="px-5 py-3 text-center">
@@ -410,7 +410,7 @@
                                        class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed">
                                 <p class="mt-1 text-xs text-indigo-500">
                                     Auto-calculated from process routing
-                                    (<span x-text="(editTarget?.processes_count ?? editTarget?.process_count ?? 0) + ' steps'"></span>)
+                                    (<span x-text="(editTarget?.processes_count ?? 0) + ' steps'"></span>)
                                 </p>
                             </div>
                             <div>

@@ -215,10 +215,10 @@
 
     {{-- ── CREATE / EDIT MODAL ────────────────────────────────── --}}
     <template x-if="modal.open">
-        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-10"
-             @click.self="modal.open = false"
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
              @keydown.escape.window="modal.open = false">
-            <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+            <div class="absolute inset-0 bg-black/40" @click="modal.open = false"></div>
+            <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-y-auto" style="max-height:92vh">
 
                 {{-- Header --}}
                 <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
@@ -288,7 +288,7 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">
                                 Excess / Buffer Qty
-                                <span class="ml-1 font-normal text-gray-400">(scrap buffer)</span>
+                                <!-- <span class="ml-1 font-normal text-gray-400">(scrap buffer)</span> -->
                             </label>
                             <input x-model.number="modal.form.excess_qty" type="number" min="0" placeholder="0"
                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400">

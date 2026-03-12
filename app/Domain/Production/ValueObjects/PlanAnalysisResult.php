@@ -66,7 +66,7 @@ readonly class PlanAnalysisResult
         return new self(
             planId:                    $plan->id,
             planStatus:                $plan->status,
-            plannedDate:               $plan->planned_date->toDateString(),
+            plannedDate:               (string) $plan->planned_date,
             plannedQty:                $plan->planned_qty,
             partNumber:                $plan->part?->part_number ?? '—',
             partName:                  $plan->part?->name ?? '—',

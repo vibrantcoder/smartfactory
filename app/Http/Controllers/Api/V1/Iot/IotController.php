@@ -290,9 +290,9 @@ class IotController extends Controller
                 DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')                                    AS hour,
                 COALESCE(SUM(part_count),  0)                                                   AS parts_sum,
                 COALESCE(SUM(part_reject), 0)                                                   AS rejects_sum,
-                SUM(CASE WHEN alarm_code > 0                     THEN 1 ELSE 0 END)            AS alarm_events,
-                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 1 THEN 1 ELSE 0 END)            AS run_ticks_hr,
-                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS idle_ticks_hr,
+                SUM(CASE WHEN alarm_code > 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS alarm_events,
+                SUM(CASE WHEN cycle_state = 1                    THEN 1 ELSE 0 END)            AS run_ticks_hr,
+                SUM(CASE WHEN cycle_state = 0 AND alarm_code = 0 THEN 1 ELSE 0 END)            AS idle_ticks_hr,
                 COUNT(*)                                                                         AS samples
             ")
             ->groupByRaw("DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')")
@@ -300,16 +300,16 @@ class IotController extends Controller
             ->get();
 
         // Time-state breakdown for the whole period
-        // State logic (matches binary IoT pulse data):
-        //   RUN   = cycle_state=1, alarm_code=0  → machine actively producing
-        //   IDLE  = cycle_state=0, alarm_code=0  → stopped but no fault (includes standby)
-        //   ALARM = alarm_code>0                 → fault active
+        // State logic (running beats alarm — device may send alarm_code while cycle is active):
+        //   RUN   = cycle_state=1  → machine actively producing (regardless of alarm_code)
+        //   ALARM = alarm_code>0, cycle_state=0  → fault, machine stopped
+        //   IDLE  = cycle_state=0, alarm_code=0  → stopped, no fault
         $ts = (clone $baseQuery)
             ->selectRaw("
                 COUNT(*)                                                                         AS total_samples,
-                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 1 THEN 1 ELSE 0 END)            AS run_ticks,
-                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS idle_ticks,
-                SUM(CASE WHEN alarm_code > 0                     THEN 1 ELSE 0 END)            AS alarm_ticks,
+                SUM(CASE WHEN cycle_state = 1                    THEN 1 ELSE 0 END)            AS run_ticks,
+                SUM(CASE WHEN cycle_state = 0 AND alarm_code = 0 THEN 1 ELSE 0 END)            AS idle_ticks,
+                SUM(CASE WHEN alarm_code > 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS alarm_ticks,
                 TIMESTAMPDIFF(SECOND, MIN(logged_at), MAX(logged_at))                          AS span_seconds
             ")
             ->first();
@@ -450,7 +450,7 @@ class IotController extends Controller
                 FLOOR(TIMESTAMPDIFF(SECOND, '{$sinceStr}', logged_at) / {$bucketSec}) AS bucket_num,
                 SUM(CASE WHEN alarm_code  > 0                                          THEN 1 ELSE 0 END) AS alarm_c,
                 SUM(CASE WHEN cycle_state = 1                                          THEN 1 ELSE 0 END) AS run_c,
-                SUM(CASE WHEN auto_mode  = 1 AND cycle_state = 0 AND alarm_code = 0   THEN 1 ELSE 0 END) AS idle_c
+                SUM(CASE WHEN alarm_code = 0 AND cycle_state = 0                       THEN 1 ELSE 0 END) AS idle_c
             ")
             ->groupByRaw("FLOOR(TIMESTAMPDIFF(SECOND, '{$sinceStr}', logged_at) / {$bucketSec})")
             ->orderBy('bucket_num')
@@ -470,10 +470,12 @@ class IotController extends Controller
             $row = $byBucket->get((string) $bucket);
 
             if ($row) {
-                if ($row->alarm_c > 0)    $state = 'alarm';
-                elseif ($row->run_c > 0)  $state = 'running';
-                elseif ($row->idle_c > 0) $state = 'idle';
-                else                       $state = 'standby';
+                // Priority: running > alarm > idle
+                // A machine can report alarm_code > 0 while still running (minor warnings).
+                // We show "running" if cycle_state fired in the bucket; alarm only when stopped.
+                if ($row->run_c > 0)       $state = 'running';
+                elseif ($row->alarm_c > 0) $state = 'alarm';
+                else                       $state = 'idle';
             } else {
                 $state = 'offline';
             }
@@ -498,14 +500,19 @@ class IotController extends Controller
         }
 
         // Build summary
-        $summary = array_fill_keys(['running', 'idle', 'alarm', 'standby', 'offline'], 0);
+        $summary = array_fill_keys(['running', 'idle', 'alarm', 'offline'], 0);
         foreach ($segments as $seg) {
             $summary[$seg['state']] += $seg['duration_min'];
         }
 
+        // Show "24:00" instead of "00:00" when window ends at midnight (full-day view)
+        $windowTo = ($until->format('H:i') === '00:00' && $totalMin >= 60 * 23)
+            ? '24:00'
+            : $until->format('H:i');
+
         return response()->json([
             'window_from' => $since->format('H:i'),
-            'window_to'   => $until->format('H:i'),
+            'window_to'   => $windowTo,
             'total_min'   => $totalMin,
             'segments'    => $segments,
             'summary_min' => $summary,
@@ -668,18 +675,15 @@ class IotController extends Controller
             return 'offline';
         }
 
-        if ($log->alarm_code > 0) {
-            return 'alarm';
-        }
-
+        // running beats alarm — machine may report minor alarm_code while cycle is active
         if ($log->cycle_state) {
             return 'running';
         }
 
-        if ($log->auto_mode) {
-            return 'idle';
+        if ($log->alarm_code > 0) {
+            return 'alarm';
         }
 
-        return 'standby';
+        return 'idle';
     }
 }

@@ -350,11 +350,6 @@
                                 Alarm
                                 <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.alarm)"></span>
                             </span>
-                            <span class="flex items-center gap-1.5 rounded-full bg-blue-900/30 border border-blue-700/30 px-2.5 py-1 text-blue-400 font-medium">
-                                <span class="h-2 w-2 rounded-full bg-blue-500 shrink-0"></span>
-                                Standby
-                                <span class="font-bold tabular-nums" x-text="fmtMin(timelineData.summary_min.standby)"></span>
-                            </span>
                             <template x-if="timelineData.summary_min.offline > 0">
                                 <span class="flex items-center gap-1.5 rounded-full bg-slate-800/60 border border-slate-700/40 px-2.5 py-1 text-slate-500 font-medium">
                                     <span class="h-2 w-2 rounded-full bg-slate-600 shrink-0"></span>
@@ -1346,8 +1341,8 @@ function iotDashboard(apiToken, factoryId, factories) {
         // ── Timeline helpers ──────────────────────────────────
 
         timelineSegColor(state) {
-            const c = { running: '#22c55e', idle: '#eab308', alarm: '#ef4444', standby: '#3b82f6', offline: '#1e293b' };
-            return c[state] || c.offline;
+            const c = { running: '#22c55e', idle: '#eab308', alarm: '#ef4444', offline: '#1e293b' };
+            return c[state] || c.idle;
         },
 
         fmtMin(minutes) {
@@ -1568,15 +1563,15 @@ function iotDashboard(apiToken, factoryId, factories) {
         // ── Styling helpers ───────────────────────────────────
 
         statusDotClass(status) {
-            return { running: 'bg-green-500', idle: 'bg-yellow-400', alarm: 'bg-red-500', standby: 'bg-blue-400', offline: 'bg-gray-400' }[status] || 'bg-gray-400';
+            return { running: 'bg-green-500', idle: 'bg-yellow-400', alarm: 'bg-red-500', offline: 'bg-gray-400' }[status] || 'bg-yellow-400';
         },
 
         statusBadgeClass(status) {
-            return { running: 'bg-green-100 text-green-800', idle: 'bg-yellow-100 text-yellow-800', alarm: 'bg-red-100 text-red-800 alarm-blink', standby: 'bg-blue-100 text-blue-800', offline: 'bg-gray-100 text-gray-600' }[status] || 'bg-gray-100 text-gray-600';
+            return { running: 'bg-green-100 text-green-800', idle: 'bg-yellow-100 text-yellow-800', alarm: 'bg-red-100 text-red-800 alarm-blink', offline: 'bg-gray-100 text-gray-600' }[status] || 'bg-yellow-100 text-yellow-800';
         },
 
         statusBorderClass(status) {
-            return { running: 'border-green-300 bg-green-50', idle: 'border-yellow-300 bg-yellow-50', alarm: 'border-red-300 bg-red-50', standby: 'border-blue-200 bg-blue-50', offline: 'border-gray-200 bg-white' }[status] || 'border-gray-200 bg-white';
+            return { running: 'border-green-300 bg-green-50', idle: 'border-yellow-300 bg-yellow-50', alarm: 'border-red-300 bg-red-50', offline: 'border-gray-200 bg-white' }[status] || 'border-yellow-300 bg-yellow-50';
         },
 
         // Dark-theme variants for the overlay
@@ -1585,17 +1580,16 @@ function iotDashboard(apiToken, factoryId, factories) {
                 running: 'bg-green-500/20 text-green-400 border border-green-500/40',
                 idle:    'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40',
                 alarm:   'bg-red-500/20 text-red-400 border border-red-500/40 alarm-blink',
-                standby: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',
                 offline: 'bg-slate-500/20 text-slate-400 border border-slate-500/40',
-            }[status] || 'bg-slate-500/20 text-slate-400 border border-slate-500/40';
+            }[status] || 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40';
         },
 
         statusBgDarkClass(status) {
-            return { running: 'bg-green-500/10', idle: 'bg-yellow-500/10', alarm: 'bg-red-500/10', standby: 'bg-blue-500/10', offline: 'bg-slate-700/30' }[status] || 'bg-slate-700/30';
+            return { running: 'bg-green-500/10', idle: 'bg-yellow-500/10', alarm: 'bg-red-500/10', offline: 'bg-slate-700/30' }[status] || 'bg-yellow-500/10';
         },
 
         statusTextDarkClass(status) {
-            return { running: 'text-green-400', idle: 'text-yellow-400', alarm: 'text-red-400 alarm-blink', standby: 'text-blue-400', offline: 'text-slate-400' }[status] || 'text-slate-400';
+            return { running: 'text-green-400', idle: 'text-yellow-400', alarm: 'text-red-400 alarm-blink', offline: 'text-slate-400' }[status] || 'text-yellow-400';
         },
 
         // Gauge text color

@@ -60,7 +60,7 @@ class ProductionPlan extends BaseModel
     {
         return [
             ...parent::casts(),
-            'planned_date' => 'date',
+            'planned_date' => 'string',
             'planned_qty'  => 'integer',
             'status'       => 'string',
         ];

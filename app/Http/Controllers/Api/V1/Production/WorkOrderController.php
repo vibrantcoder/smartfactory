@@ -318,11 +318,11 @@ class WorkOrderController extends Controller
             'message'    => count($plans) . ' production plan(s) created successfully.',
             'plan_count' => count($plans),
             'total_qty'  => $totalQty,
-            'from_date'  => $plans[0]->planned_date?->format('Y-m-d') ?? null,
-            'to_date'    => $plans[count($plans) - 1]->planned_date?->format('Y-m-d') ?? null,
+            'from_date'  => $plans[0]->planned_date ?? null,
+            'to_date'    => $plans[count($plans) - 1]->planned_date ?? null,
             'plans'      => array_map(fn($p) => [
                 'id'           => $p->id,
-                'planned_date' => $p->planned_date?->format('Y-m-d'),
+                'planned_date' => $p->planned_date,
                 'planned_qty'  => $p->planned_qty,
             ], $plans),
         ], 201);

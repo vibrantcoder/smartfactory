@@ -1496,7 +1496,7 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
                 part_id:         plan.part_id,
                 part_process_id: plan.part_process_id || '',
                 shift_id:        plan.shift_id,
-                planned_date:    plan.planned_date,
+                planned_date:    plan.planned_date ? String(plan.planned_date).substring(0, 10) : '',
                 planned_qty:     plan.planned_qty,
                 status:          plan.status,
                 factory_id:      plan.factory_id || '',

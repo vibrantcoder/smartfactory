@@ -76,7 +76,7 @@
                                         Edit
                                     </button>
                                     <button @click="openSettings(f)"
-                                            class="rounded-md bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors">
+                                            class="rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors">
                                         Settings
                                     </button>
                                     <button x-show="f.status === 'active'"
@@ -230,11 +230,6 @@
                              ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
                              : 'bg-red-50 text-red-700 ring-1 ring-red-200'"
                          x-text="settingsModal.weekOffMsg"></div>
-                    <button @click="saveWeekOff()" :disabled="settingsModal.savingWeekOff"
-                            style="background:#7c3aed;color:#fff;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:600;border:none;cursor:pointer;opacity:1;transition:opacity .15s"
-                            :style="settingsModal.savingWeekOff ? 'opacity:.6;cursor:not-allowed' : ''"
-                            x-text="settingsModal.savingWeekOff ? 'Saving…' : 'Save Week Off Days'">Save Week Off Days
-                    </button>
                 </div>
 
                 <hr class="border-gray-100">
@@ -249,9 +244,9 @@
                         <template x-for="(row, idx) in settingsModal.pendingRows" :key="idx">
                             <div class="flex gap-2 items-center">
                                 <input x-model="row.date" type="date"
-                                       class="rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                       class="rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400">
                                 <input x-model="row.name" type="text" placeholder="e.g. Republic Day"
-                                       class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                       class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400">
                                 <button @click="settingsModal.pendingRows = settingsModal.pendingRows.filter((_, i) => i !== idx)"
                                         x-show="settingsModal.pendingRows.length > 1"
                                         class="rounded-lg p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
@@ -266,16 +261,11 @@
                     {{-- Action buttons --}}
                     <div class="flex items-center gap-2 mb-3">
                         <button @click="addMoreHolidayRow()"
-                                class="inline-flex items-center gap-1.5 rounded-lg border-2 border-dashed border-violet-300 px-4 py-2 text-xs font-medium text-violet-600 hover:bg-violet-50 hover:border-violet-400 transition-colors">
+                                class="inline-flex items-center gap-1.5 rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-colors">
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                             </svg>
                             Add More
-                        </button>
-                        <button @click="savePendingHolidays()" :disabled="settingsModal.savingHolidays"
-                                style="background:#7c3aed;color:#fff;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:opacity .15s"
-                                :style="settingsModal.savingHolidays ? 'opacity:.6;cursor:not-allowed' : ''"
-                                x-text="settingsModal.savingHolidays ? 'Saving…' : 'Save Holidays'">Save Holidays
                         </button>
                     </div>
 
@@ -310,10 +300,18 @@
                 </div>
             </div>
 
-            <div class="flex justify-end border-t border-gray-100 px-6 py-4 flex-shrink-0">
+            <div class="flex justify-end gap-2 border-t border-gray-100 px-6 py-4 flex-shrink-0">
                 <button @click="settingsModal.open = false"
                         class="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                    Close
+                    Cancel
+                </button>
+                <button @click="saveAllSettings()"
+                        :disabled="settingsModal.savingWeekOff || settingsModal.savingHolidays"
+                        class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span x-text="(settingsModal.savingWeekOff || settingsModal.savingHolidays) ? 'Saving…' : 'Save Settings'"></span>
                 </button>
             </div>
         </div>
@@ -445,6 +443,16 @@ function factoryManager(apiToken) {
             setTimeout(() => { this.settingsModal.weekOffMsg = ''; }, 3000);
         },
 
+        async saveAllSettings() {
+            // Save week-off days (always)
+            await this.saveWeekOff();
+            // Save pending holiday rows only if at least one row is filled
+            const rows = this.settingsModal.pendingRows.filter(r => r.date && r.name.trim());
+            if (rows.length) {
+                await this.savePendingHolidays();
+            }
+        },
+
         async saveWeekOff() {
             this.settingsModal.savingWeekOff = true;
             this.settingsModal.weekOffMsg = '';
@@ -479,7 +487,6 @@ function factoryManager(apiToken) {
             this.settingsModal.holidaySuccessMsg = '';
             const rows = this.settingsModal.pendingRows.filter(r => r.date && r.name.trim());
             if (!rows.length) {
-                this.settingsModal.holidayError = 'Fill in at least one date and name before saving.';
                 return;
             }
             this.settingsModal.savingHolidays = true;

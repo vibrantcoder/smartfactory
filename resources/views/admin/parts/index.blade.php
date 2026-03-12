@@ -103,6 +103,7 @@
                             <th class="px-5 py-3">Unit</th>
                             <th class="px-5 py-3 text-center">Cycle Time</th>
                             <th class="px-5 py-3 text-center">Routing</th>
+                            <th class="px-5 py-3 text-center">Files</th>
                             <th class="px-5 py-3 text-center">Status</th>
                             <th class="px-5 py-3"></th>
                         </tr>
@@ -126,6 +127,23 @@
                                               : 'bg-gray-100 text-gray-500'"
                                           x-text="(p.process_count ?? 0) + ' steps'"></span>
                                 </td>
+                                {{-- Files / Drawings --}}
+                                <td class="px-5 py-3 text-center">
+                                    <button @click="openDrawings(p)" type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors"
+                                            :class="(p.drawings_count ?? 0) > 0
+                                                ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                                : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'"
+                                            :title="(p.drawings_count ?? 0) > 0 ? (p.drawings_count + ' drawing(s)') : 'No drawings'">
+                                        {{-- paperclip icon --}}
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                                        </svg>
+                                        <span x-show="(p.drawings_count ?? 0) > 0" x-text="p.drawings_count"></span>
+                                    </button>
+                                </td>
+
                                 <td class="px-5 py-3 text-center">
                                     <span class="rounded-full px-2.5 py-0.5 text-xs font-medium"
                                           :class="p.status === 'active'
@@ -277,6 +295,39 @@
                             </div>
                             {{-- Cycle time shown only after routing is defined (edit flow) --}}
                         </div>
+                        {{-- Drawings upload (optional at create time) --}}
+                        <div class="border-t border-gray-100 pt-4">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Attach Drawing Files
+                                <span class="font-normal text-gray-400 ml-1">(PDF, DWG, DXF, image — max 20 MB each)</span>
+                            </label>
+                            <label class="flex flex-col items-center justify-center gap-1.5 cursor-pointer
+                                          rounded-lg border-2 border-dashed border-gray-200 py-4 text-center
+                                          hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors">
+                                <svg class="h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                                </svg>
+                                <span class="text-xs text-gray-400">Click to select files</span>
+                                <input type="file" multiple accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.svg,.step,.stp,.iges,.igs"
+                                       class="hidden"
+                                       @change="createFiles = $event.target.files">
+                            </label>
+                            <template x-if="createFiles && createFiles.length > 0">
+                                <ul class="mt-2 space-y-1">
+                                    <template x-for="(f, i) in Array.from(createFiles)" :key="i">
+                                        <li class="flex items-center gap-2 text-xs text-gray-600">
+                                            <svg class="h-3.5 w-3.5 text-indigo-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                            </svg>
+                                            <span class="truncate" x-text="f.name"></span>
+                                            <span class="text-gray-400 shrink-0" x-text="f.size < 1048576 ? Math.round(f.size/1024) + ' KB' : (f.size/1048576).toFixed(1) + ' MB'"></span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </template>
+                        </div>
+
                         <template x-if="formError">
                             <p class="text-xs text-red-600" x-text="formError"></p>
                         </template>
@@ -372,6 +423,79 @@
                                 </select>
                             </div>
                         </div>
+                        {{-- Existing drawings --}}
+                        <div class="border-t border-gray-100 pt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-xs font-medium text-gray-700">Drawing Files</label>
+                                <span class="text-[10px] text-gray-400" x-text="editDrawings.length + ' file(s)'"></span>
+                            </div>
+
+                            {{-- Loading skeleton --}}
+                            <template x-if="drawingsLoading">
+                                <div class="space-y-1.5">
+                                    <template x-for="i in 2" :key="i">
+                                        <div class="h-8 animate-pulse rounded bg-gray-100"></div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            {{-- File list --}}
+                            <template x-if="!drawingsLoading && editDrawings.length > 0">
+                                <ul class="space-y-1.5 mb-3">
+                                    <template x-for="d in editDrawings" :key="d.id">
+                                        <li class="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                                            {{-- type icon --}}
+                                            <span class="shrink-0">
+                                                <template x-if="d.file_type === 'pdf'">
+                                                    <svg class="h-4 w-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
+                                                </template>
+                                                <template x-if="d.file_type === 'image'">
+                                                    <svg class="h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                                                </template>
+                                                <template x-if="d.file_type === 'cad'">
+                                                    <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+                                                </template>
+                                                <template x-if="d.file_type === 'file'">
+                                                    <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                </template>
+                                            </span>
+                                            <a :href="d.url" target="_blank"
+                                               class="flex-1 min-w-0 text-xs text-indigo-600 hover:text-indigo-800 truncate"
+                                               x-text="d.original_name"></a>
+                                            <span class="text-[10px] text-gray-400 shrink-0" x-text="d.human_size"></span>
+                                            <button @click="deleteDrawing(d)" type="button"
+                                                    class="shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                                                    title="Delete">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                </svg>
+                                            </button>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </template>
+
+                            <template x-if="!drawingsLoading && editDrawings.length === 0">
+                                <p class="text-xs text-gray-400 mb-3">No drawings attached yet.</p>
+                            </template>
+
+                            {{-- Upload more --}}
+                            <label class="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-gray-200
+                                          px-3 py-2 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Add drawing files…
+                                <input type="file" multiple accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.svg,.step,.stp,.iges,.igs"
+                                       class="hidden"
+                                       @change="uploadEditDrawings($event)">
+                            </label>
+
+                            <template x-if="drawingError">
+                                <p class="mt-1 text-xs text-red-600" x-text="drawingError"></p>
+                            </template>
+                        </div>
+
                         <template x-if="formError">
                             <p class="text-xs text-red-600" x-text="formError"></p>
                         </template>
@@ -610,6 +734,116 @@
         </div>
     </div>
 
+    {{-- ════════════════════════════════════════════════════════
+         DRAWINGS PANEL — view & manage drawings for a part
+    ════════════════════════════════════════════════════════ --}}
+    <div x-show="showDrawings" style="display:none"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+         @click.self="showDrawings = false">
+        <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col"
+             style="max-height: calc(100vh - 4rem)" @click.stop>
+
+            {{-- Header --}}
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4 flex-shrink-0">
+                <div>
+                    <h3 class="text-base font-semibold text-gray-900">Drawing Files</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                        <span class="font-mono text-indigo-600" x-text="drawingsPart?.part_number"></span>
+                        — <span x-text="drawingsPart?.name"></span>
+                    </p>
+                </div>
+                <button @click="showDrawings = false"
+                        class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            {{-- File list --}}
+            <div class="flex-1 overflow-y-auto px-6 py-4">
+
+                <template x-if="drawingsLoading">
+                    <div class="space-y-2">
+                        <template x-for="i in 3" :key="i">
+                            <div class="h-10 animate-pulse rounded-lg bg-gray-100"></div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-if="!drawingsLoading && panelDrawings.length === 0">
+                    <div class="flex flex-col items-center py-10 text-center">
+                        <svg class="h-10 w-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                        </svg>
+                        <p class="mt-3 text-sm text-gray-400">No drawings attached yet.</p>
+                    </div>
+                </template>
+
+                <template x-if="!drawingsLoading && panelDrawings.length > 0">
+                    <ul class="space-y-2">
+                        <template x-for="d in panelDrawings" :key="d.id">
+                            <li class="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+                                {{-- type icon --}}
+                                <span class="shrink-0">
+                                    <template x-if="d.file_type === 'pdf'">
+                                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
+                                    </template>
+                                    <template x-if="d.file_type === 'image'">
+                                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"/></svg>
+                                    </template>
+                                    <template x-if="d.file_type === 'cad'">
+                                        <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+                                    </template>
+                                    <template x-if="d.file_type === 'file'">
+                                        <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    </template>
+                                </span>
+                                <div class="flex-1 min-w-0">
+                                    <a :href="d.url" target="_blank"
+                                       class="block text-sm text-indigo-600 hover:text-indigo-800 truncate font-medium"
+                                       x-text="d.original_name"></a>
+                                    <p class="text-[10px] text-gray-400 mt-0.5" x-text="d.human_size"></p>
+                                </div>
+                                <a :href="d.url" target="_blank" download
+                                   class="shrink-0 rounded-lg bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                   title="Download">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                    </svg>
+                                </a>
+                                <button @click="deletePanelDrawing(d)" type="button"
+                                        class="shrink-0 rounded-lg p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                        title="Delete">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+            </div>
+
+            {{-- Footer: upload + close --}}
+            <div class="flex items-center justify-between border-t border-gray-100 px-6 py-4 flex-shrink-0 gap-3">
+                <label class="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-gray-200
+                              px-3 py-2 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Upload files
+                    <input type="file" multiple accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.svg,.step,.stp,.iges,.igs"
+                           class="hidden" @change="uploadPanelDrawings($event)">
+                </label>
+                <template x-if="drawingError">
+                    <p class="text-xs text-red-600 flex-1" x-text="drawingError"></p>
+                </template>
+                <button @click="showDrawings = false"
+                        class="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 @endsection
@@ -638,6 +872,7 @@ function partsPage(apiToken, factoryId, factories) {
         showEdit:          false,
         showDiscontinue:   false,
         showSchedule:      false,
+        showDrawings:      false,
         editTarget:        null,
         discontinueTarget: null,
         schedulePart:      null,
@@ -648,6 +883,14 @@ function partsPage(apiToken, factoryId, factories) {
         form:              {},
         saving:            false,
         formError:         null,
+
+        // ── Drawings state
+        createFiles:    null,        // FileList from create modal picker
+        editDrawings:   [],          // drawings shown in edit modal
+        panelDrawings:  [],          // drawings shown in view panel
+        drawingsPart:   null,        // part for the view panel
+        drawingsLoading: false,
+        drawingError:   null,
 
         // ── Toast
         toast: { show: false, message: '', type: 'success' },
@@ -722,6 +965,7 @@ function partsPage(apiToken, factoryId, factories) {
                 cycle_time_std: '',
             };
             this.formError  = null;
+            this.createFiles = null;
             this.showCreate = true;
         },
 
@@ -740,6 +984,12 @@ function partsPage(apiToken, factoryId, factories) {
                 });
                 const data = await res.json();
                 if (!res.ok) { this.formError = this.extractError(data); return; }
+
+                // Upload any selected drawings
+                if (this.createFiles && this.createFiles.length > 0) {
+                    await this._uploadFiles(data.id, this.createFiles);
+                }
+
                 this.showCreate = false;
                 this.showToast('Part created. Now configure its routing.', 'success');
                 this.load(1);
@@ -753,7 +1003,6 @@ function partsPage(apiToken, factoryId, factories) {
         // ── Edit
         openEdit(p) {
             this.editTarget = p;
-            // Auto-populate cycle_time_std from routing total when routing exists
             const cycleTime = (p.total_cycle_time > 0)
                 ? p.total_cycle_time
                 : (p.cycle_time_std ?? '');
@@ -766,8 +1015,11 @@ function partsPage(apiToken, factoryId, factories) {
                 cycle_time_std: cycleTime,
                 status:         p.status,
             };
-            this.formError = null;
-            this.showEdit  = true;
+            this.formError    = null;
+            this.drawingError = null;
+            this.editDrawings = [];
+            this.showEdit     = true;
+            this._loadEditDrawings(p.id);
         },
 
         async submitEdit() {
@@ -873,6 +1125,94 @@ function partsPage(apiToken, factoryId, factories) {
             return Object.entries(byDate)
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([date, data]) => ({ date, ...data }));
+        },
+
+        // ── Drawings ─────────────────────────────────────────────
+
+        async _loadEditDrawings(partId) {
+            this.drawingsLoading = true;
+            try {
+                const res  = await fetch(`/api/v1/parts/${partId}/drawings`, { headers: this.headers });
+                const data = await res.json();
+                this.editDrawings = res.ok ? data : [];
+            } catch { this.editDrawings = []; }
+            finally  { this.drawingsLoading = false; }
+        },
+
+        async _uploadFiles(partId, fileList) {
+            const fd = new FormData();
+            Array.from(fileList).forEach(f => fd.append('files[]', f));
+            const headers = { Authorization: `Bearer ${apiToken}`, 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '' };
+            const res  = await fetch(`/api/v1/parts/${partId}/drawings`, { method: 'POST', headers, body: fd });
+            return res.json();
+        },
+
+        async uploadEditDrawings(event) {
+            if (!event.target.files.length) return;
+            this.drawingError = null;
+            try {
+                const uploaded = await this._uploadFiles(this.editTarget.id, event.target.files);
+                if (Array.isArray(uploaded)) {
+                    this.editDrawings = [...this.editDrawings, ...uploaded];
+                    // sync count in list
+                    const p = this.parts.find(x => x.id === this.editTarget.id);
+                    if (p) p.drawings_count = (p.drawings_count || 0) + uploaded.length;
+                } else {
+                    this.drawingError = uploaded.message ?? 'Upload failed.';
+                }
+            } catch { this.drawingError = 'Upload error.'; }
+            event.target.value = '';
+        },
+
+        async deleteDrawing(drawing) {
+            if (!confirm(`Delete "${drawing.original_name}"?`)) return;
+            try {
+                await fetch(`/api/v1/parts/${this.editTarget.id}/drawings/${drawing.id}`, { method: 'DELETE', headers: this.headers });
+                this.editDrawings = this.editDrawings.filter(d => d.id !== drawing.id);
+                const p = this.parts.find(x => x.id === this.editTarget.id);
+                if (p) p.drawings_count = Math.max(0, (p.drawings_count || 1) - 1);
+            } catch { this.drawingError = 'Delete failed.'; }
+        },
+
+        // ── View Drawings panel (from listing icon)
+        async openDrawings(p) {
+            this.drawingsPart   = p;
+            this.panelDrawings  = [];
+            this.drawingError   = null;
+            this.showDrawings   = true;
+            this.drawingsLoading = true;
+            try {
+                const res  = await fetch(`/api/v1/parts/${p.id}/drawings`, { headers: this.headers });
+                const data = await res.json();
+                this.panelDrawings = res.ok ? data : [];
+            } catch { this.panelDrawings = []; }
+            finally  { this.drawingsLoading = false; }
+        },
+
+        async uploadPanelDrawings(event) {
+            if (!event.target.files.length) return;
+            this.drawingError = null;
+            try {
+                const uploaded = await this._uploadFiles(this.drawingsPart.id, event.target.files);
+                if (Array.isArray(uploaded)) {
+                    this.panelDrawings = [...this.panelDrawings, ...uploaded];
+                    const p = this.parts.find(x => x.id === this.drawingsPart.id);
+                    if (p) p.drawings_count = (p.drawings_count || 0) + uploaded.length;
+                } else {
+                    this.drawingError = uploaded.message ?? 'Upload failed.';
+                }
+            } catch { this.drawingError = 'Upload error.'; }
+            event.target.value = '';
+        },
+
+        async deletePanelDrawing(drawing) {
+            if (!confirm(`Delete "${drawing.original_name}"?`)) return;
+            try {
+                await fetch(`/api/v1/parts/${this.drawingsPart.id}/drawings/${drawing.id}`, { method: 'DELETE', headers: this.headers });
+                this.panelDrawings = this.panelDrawings.filter(d => d.id !== drawing.id);
+                const p = this.parts.find(x => x.id === this.drawingsPart.id);
+                if (p) p.drawings_count = Math.max(0, (p.drawings_count || 1) - 1);
+            } catch { this.drawingError = 'Delete failed.'; }
         },
 
         // ── Helpers

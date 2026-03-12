@@ -72,7 +72,7 @@
                         {{-- Permission count --}}
                         <td class="px-5 py-3 text-center">
                             <template x-if="role.name === 'super-admin'">
-                                <span class="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">All (bypass)</span>
+                                <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">All (bypass)</span>
                             </template>
                             <template x-if="role.name !== 'super-admin'">
                                 <span class="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700"
@@ -136,7 +136,7 @@
                         x-model="newName"
                         @keydown.enter="createRole"
                         placeholder="e.g. quality-inspector"
-                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                     >
                 </div>
                 <p x-show="createError" x-text="createError"

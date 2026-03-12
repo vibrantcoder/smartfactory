@@ -57,6 +57,7 @@ class EloquentPartRepository implements PartRepositoryInterface
         return $query
             ->withCustomer()
             ->withProcessCount()
+            ->withCount('drawings')
             ->when(
                 isset($filters['status']),
                 fn($q) => $q->where('parts.status', $filters['status'])     // idx_parts_status

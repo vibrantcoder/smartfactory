@@ -18,6 +18,12 @@
 
     .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
+    /* Toggle buttons — active state (not scanned by Tailwind v4 from dynamic :class) */
+    .toggle-btn { background:#fff; color:#4b5563; border:1px solid #e5e7eb; }
+    .toggle-btn:hover { background:#f9fafb; }
+    .toggle-btn.active-violet { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+    .toggle-btn.active-teal   { background:#0d9488; color:#fff; border-color:#0d9488; }
+
     .modal-in { animation: modalIn .18s ease-out; }
     @keyframes modalIn {
         from { opacity: 0; transform: scale(.97) translateY(8px); }
@@ -45,7 +51,6 @@
         {{ json_encode($holidays) }}
     )"
     x-init="init()"
-    class="h-full flex flex-col overflow-hidden bg-gray-50"
 >
 
 {{-- ══════════════════════════════════════════════════════════
@@ -501,7 +506,7 @@
                     Cancel
                 </button>
                 <button @click="savePlan()" :disabled="saving"
-                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60 transition-colors flex items-center gap-1.5">
+                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-1.5">
                     <svg x-show="saving" class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
@@ -518,7 +523,7 @@
 {{-- ══════════════════════════════════════════════════════════
      TOP TOOLBAR
 ══════════════════════════════════════════════════════════ --}}
-<div class="shrink-0 flex flex-wrap items-center gap-3 bg-white border-b border-gray-200 px-5 py-2.5 shadow-sm">
+<div class="flex flex-wrap items-center gap-3 rounded-xl bg-white border border-gray-200 px-5 py-3 shadow-sm mb-4">
 
     {{-- Factory selector (only when multiple factories exist) --}}
     @if($hasMultiFactory)
@@ -565,43 +570,50 @@
         Loading…
     </div>
 
-    {{-- Right side --}}
-    <div class="ml-auto flex items-center gap-3">
-        {{-- Legend --}}
-        <div class="hidden xl:flex items-center gap-3 text-xs text-gray-500">
-            <span class="flex items-center gap-1.5"><span class="status-dot bg-gray-400"></span>Draft</span>
-            <span class="flex items-center gap-1.5"><span class="status-dot bg-blue-500"></span>Scheduled</span>
-            <span class="flex items-center gap-1.5"><span class="status-dot bg-amber-500"></span>In Progress</span>
-            <span class="flex items-center gap-1.5"><span class="status-dot bg-green-500"></span>Completed</span>
-        </div>
-
-        {{-- Workload toggle --}}
-        <button @click="showWorkload = !showWorkload"
-                :class="showWorkload ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
-                class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-            </svg>
-            Workload
-        </button>
-
-        {{-- Machine Load toggle --}}
-        <button @click="toggleLoadChart()"
-                :class="showLoadChart ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
-                class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-            </svg>
-            Load Chart
-        </button>
-
+    {{-- Right side: New Plan button --}}
+    <div class="ml-auto">
         <button @click="openCreate('', todayStr, '')"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm">
+                class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm">
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
             New Plan
         </button>
+    </div>
+</div>
+
+{{-- ── View toggles + Legend (always visible row) ───────────────────────── --}}
+<div class="flex flex-wrap items-center gap-2 mb-4">
+
+    {{-- Workload toggle --}}
+    <button @click="showWorkload = !showWorkload"
+            :class="showWorkload ? 'active-violet' : ''"
+            class="toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors shadow-sm">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        Process Workload
+    </button>
+
+    {{-- Machine Load toggle --}}
+    <button @click="toggleLoadChart()"
+            :class="showLoadChart ? 'active-teal' : ''"
+            class="toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors shadow-sm">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+        Machine Load
+    </button>
+
+    {{-- Spacer --}}
+    <div class="flex-1"></div>
+
+    {{-- Legend --}}
+    <div class="flex items-center gap-3 text-xs text-gray-500">
+        <span class="flex items-center gap-1.5"><span class="status-dot bg-gray-400"></span>Draft</span>
+        <span class="flex items-center gap-1.5"><span class="status-dot bg-blue-500"></span>Scheduled</span>
+        <span class="flex items-center gap-1.5"><span class="status-dot bg-amber-500"></span>In Progress</span>
+        <span class="flex items-center gap-1.5"><span class="status-dot bg-green-500"></span>Completed</span>
     </div>
 </div>
 
@@ -616,8 +628,8 @@
      PROCESS WORKLOAD PANEL (collapsible)
      Shows: Process → Machines running it → daily qty totals
 ══════════════════════════════════════════════════════════ --}}
-<div x-show="showWorkload" x-cloak
-     class="shrink-0 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-white overflow-x-auto">
+<div x-show="showWorkload" style="display:none"
+     class="mb-4 rounded-xl border border-violet-100 bg-gradient-to-r from-violet-50 to-white overflow-x-auto">
     <div class="px-5 py-3">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-xs font-bold text-violet-700 uppercase tracking-widest flex items-center gap-1.5">
@@ -725,8 +737,8 @@
      Shows daily utilisation % per machine for the current week.
      Color coding: green <80 %, amber 80–99 %, red ≥100 %
 ══════════════════════════════════════════════════════════ --}}
-<div x-show="showLoadChart" x-cloak
-     class="shrink-0 border-b border-teal-100 bg-gradient-to-r from-teal-50 to-white overflow-x-auto">
+<div x-show="showLoadChart" style="display:none"
+     class="mb-4 rounded-xl border border-teal-100 bg-gradient-to-r from-teal-50 to-white overflow-x-auto">
     <div class="px-5 py-3">
         <div class="flex items-center justify-between mb-3">
             <h3 class="text-xs font-bold text-teal-700 uppercase tracking-widest flex items-center gap-1.5">
@@ -817,7 +829,7 @@
      Rows = Machines  |  Columns = Days (Mon–Sun)
      Each cell = shift slots stacked vertically
 ══════════════════════════════════════════════════════════ --}}
-<div class="flex-1 overflow-auto">
+<div class="overflow-auto rounded-xl border border-gray-200 shadow-sm bg-white" style="max-height: calc(100vh - 13rem)">
     <table class="cal-table w-full text-sm">
 
         {{-- ── Column headers (sticky top) ─────────────── --}}
@@ -902,6 +914,32 @@
                                     <span class="text-[10px] text-gray-300">0%</span>
                                 </div>
                                 <div class="h-1.5 w-full rounded-full bg-gray-100"></div>
+                            </div>
+                        </template>
+
+                        {{-- Weekly production summary: Planning vs Actual --}}
+                        <template x-if="machineWeekSummaryMap[machine.id] && machineWeekSummaryMap[machine.id].planned > 0">
+                            <div class="mt-2 space-y-0.5 border-t border-gray-100 pt-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[9px] text-gray-400">Planning</span>
+                                    <span class="text-[9px] font-semibold text-indigo-600"
+                                          x-text="Number(machineWeekSummaryMap[machine.id].planned).toLocaleString() + ' pcs'"></span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[9px] text-gray-400">Production</span>
+                                    <span class="text-[9px] font-semibold"
+                                          :class="machineWeekSummaryMap[machine.id].actual >= machineWeekSummaryMap[machine.id].planned
+                                                  ? 'text-green-600' : 'text-amber-600'"
+                                          x-text="Number(machineWeekSummaryMap[machine.id].actual).toLocaleString() + ' pcs'"></span>
+                                </div>
+                                {{-- Attainment mini-bar --}}
+                                <div class="h-1 w-full rounded-full bg-gray-100 overflow-hidden mt-0.5">
+                                    <div class="h-1 rounded-full transition-all duration-500"
+                                         :class="machineWeekSummaryMap[machine.id].actual >= machineWeekSummaryMap[machine.id].planned
+                                                 ? 'bg-green-500' : 'bg-amber-400'"
+                                         :style="'width:' + Math.min(100, Math.round((machineWeekSummaryMap[machine.id].actual / machineWeekSummaryMap[machine.id].planned) * 100)) + '%'">
+                                    </div>
+                                </div>
                             </div>
                         </template>
                     </td>
@@ -1139,6 +1177,22 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
                             : pct > 0    ? 'text-green-600'
                             : 'text-gray-400',
                 };
+            }
+            return map;
+        },
+
+        // machine_id → { planned, actual } for the visible week (excludes cancelled)
+        get machineWeekSummaryMap() {
+            const weekDates = new Set((this.weekDays || []).map(d => d.date));
+            const map = {};
+            for (const plan of this.plans) {
+                if (plan.status === 'cancelled') continue;
+                const date = plan.planned_date ? String(plan.planned_date).substring(0, 10) : '';
+                if (!weekDates.has(date)) continue;
+                const mid = plan.machine_id;
+                if (!map[mid]) map[mid] = { planned: 0, actual: 0 };
+                map[mid].planned += plan.planned_qty || 0;
+                map[mid].actual  += plan.good_qty_sum || 0;
             }
             return map;
         },

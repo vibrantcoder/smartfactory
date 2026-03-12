@@ -322,7 +322,7 @@
                             <input
                                 type="time"
                                 x-model="form.break_start"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                             >
                         </div>
                         <div>
@@ -330,7 +330,7 @@
                             <input
                                 type="time"
                                 x-model="form.break_end"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                             >
                         </div>
                     </div>

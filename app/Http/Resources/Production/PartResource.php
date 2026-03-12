@@ -32,6 +32,7 @@ class PartResource extends JsonResource
 
             // Count — only when loaded via withCount()
             'processes_count' => $this->whenCounted('processes'),
+            'drawings_count'  => $this->whenCounted('drawings'),
 
             // Customer context — when eager-loaded
             'customer' => $this->whenLoaded('customer', fn() => [

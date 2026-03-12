@@ -63,6 +63,11 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
         Route::put('parts/{part}/processes',
             [\App\Http\Controllers\Api\V1\Production\PartController::class, 'syncProcesses']);
 
+        // ── Part Drawings ──────────────────────────────────────────────────
+        Route::get   ('parts/{part}/drawings',              [\App\Http\Controllers\Api\V1\Production\PartDrawingController::class, 'index'])->name('parts.drawings.index');
+        Route::post  ('parts/{part}/drawings',              [\App\Http\Controllers\Api\V1\Production\PartDrawingController::class, 'store'])->name('parts.drawings.store');
+        Route::delete('parts/{part}/drawings/{drawing}',    [\App\Http\Controllers\Api\V1\Production\PartDrawingController::class, 'destroy'])->name('parts.drawings.destroy');
+
         // ── Process Masters ───────────────────────────────────────────────
         Route::apiResource('process-masters', \App\Http\Controllers\Api\V1\Production\ProcessMasterController::class);
         Route::get('process-masters-palette',

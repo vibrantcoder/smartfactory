@@ -242,7 +242,7 @@
                     </div>
                     <div class="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
                         <button type="button" @click="showCreate = false"
-                                class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                                class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                             Cancel
                         </button>
                         <button type="submit" :disabled="saving"
@@ -321,7 +321,7 @@
                     </div>
                     <div class="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
                         <button type="button" @click="showEdit = false"
-                                class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                                class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                             Cancel
                         </button>
                         <button type="submit" :disabled="saving"
@@ -355,7 +355,7 @@
                 </div>
                 <div class="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
                     <button @click="showDeactivate = false"
-                            class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         Cancel
                     </button>
                     <button @click="submitDeactivate()" :disabled="saving"

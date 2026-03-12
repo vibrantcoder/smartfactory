@@ -21,6 +21,7 @@ use App\Http\Controllers\Employee\Production\JobsController as EmployeeJobsContr
 use App\Domain\Production\Models\Part;
 use Illuminate\Support\Facades\Route;
 
+
 // Public auth routes
 Route::get('/login', [LoginController::class, 'showForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login'])->name('admin.login');

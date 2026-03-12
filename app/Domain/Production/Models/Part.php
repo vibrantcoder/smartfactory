@@ -11,6 +11,7 @@ use App\Domain\Shared\Traits\HasFactoryScope;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Domain\Production\Models\PartDrawing;
 
 /**
  * Part
@@ -109,6 +110,11 @@ class Part extends BaseModel
     public function productionPlans(): HasMany
     {
         return $this->hasMany(ProductionPlan::class, 'part_id');
+    }
+
+    public function drawings(): HasMany
+    {
+        return $this->hasMany(PartDrawing::class, 'part_id')->orderBy('created_at');
     }
 
     // ── Accessors ─────────────────────────────────────────────

@@ -13,7 +13,7 @@
 
 @section('content')
 <div
-    x-data="employeeDashboard('{{ $apiToken }}', {{ $machineId }}, {{ $factoryId ?? 'null' }})"
+    x-data="employeeDashboard('{{ $apiToken }}', {{ $machineId }}, {{ $factoryId ?? 'null' }}, {{ $shifts->map(fn($s) => ['id'=>$s->id,'name'=>$s->name,'start_time'=>$s->start_time,'end_time'=>$s->end_time])->values()->toJson() }})"
     x-init="init()"
     class="space-y-5"
 >
@@ -59,7 +59,7 @@
                 </div>
                 <p class="text-xl font-bold"
                    :class="liveData.cycle_state ? 'text-green-600' : 'text-gray-400'"
-                   x-text="liveData.cycle_state ? 'Active' : 'Stopped'"></p>
+                   x-text="liveData.cycle_state ? 'Active' : 'Off'"></p>
             </div>
 
             {{-- Auto Mode --}}
@@ -86,10 +86,11 @@
                    x-text="(liveData.alarm_code > 0) ? '#' + liveData.alarm_code : 'None'"></p>
             </div>
 
-            {{-- Last Signal --}}
+            {{-- Current Shift --}}
             <div class="px-5 py-4 text-center">
-                <p class="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Last Signal</p>
-                <p class="text-sm font-semibold text-gray-700 font-mono" x-text="lastSeen"></p>
+                <p class="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Shift</p>
+                <p class="text-sm font-bold text-gray-700 leading-tight truncate" x-text="currentShiftName || '—'"></p>
+                <p class="text-[11px] text-gray-400 mt-0.5 font-mono" x-text="lastSeen"></p>
             </div>
         </div>
     </div>
@@ -102,7 +103,7 @@
                 <p class="text-xs text-gray-400 mt-0.5" x-text="timelineWindow"></p>
             </div>
             <div class="flex items-center gap-2">
-                <select x-model="selectedShiftId" @change="loadTimeline()" class="text-xs rounded-lg border border-gray-200 px-2.5 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400">
+                <select x-model="selectedShiftId" @change="currentShiftName = selectedShiftId ? (shifts.find(s=>s.id==selectedShiftId)?.name||'') : 'All Day'; loadTimeline(); loadChart()" class="text-xs rounded-lg border border-gray-200 px-2.5 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400">
                     <option value="">All Day (24h)</option>
                     @foreach($shifts as $shift)
                     <option value="{{ $shift->id }}">{{ $shift->name }} ({{ substr($shift->start_time,0,5) }}–{{ substr($shift->end_time,0,5) }})</option>
@@ -220,7 +221,7 @@
                     <p class="text-xs text-gray-500">
                         {{ $plan->part?->part_number }}
                         &middot; {{ $plan->shift?->name }}
-                        &middot; {{ $plan->planned_date->format('d M') }}
+                        &middot; {{ \Carbon\Carbon::parse($plan->planned_date)->format('d M') }}
                     </p>
                 </div>
                 <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border
@@ -257,15 +258,17 @@
 
 @push('scripts')
 <script>
-function employeeDashboard(token, machineId, factoryId) {
+function employeeDashboard(token, machineId, factoryId, shifts) {
     return {
         token, machineId, factoryId,
+        shifts: shifts || [],
 
         liveData:        {},
         iotStatus:       'offline',
         lastSeen:        '—',
         dotClass:        'bg-gray-400',
         badgeClass:      'bg-gray-100 text-gray-600',
+        currentShiftName: '',
 
         timeline:        null,
         timelineLoading: false,
@@ -303,10 +306,31 @@ function employeeDashboard(token, machineId, factoryId) {
         // ── Lifecycle ─────────────────────────────────────────
 
         init() {
+            this.autoSelectShift();
             this.fetchStatus();
             this.loadTimeline();
             this.loadChart();
             this._pollTimer = setInterval(() => this.fetchStatus(), 10000);
+        },
+
+        autoSelectShift() {
+            if (!this.shifts.length) return;
+            const now    = new Date();
+            const nowMin = now.getHours() * 60 + now.getMinutes();
+            const active = this.shifts.find(s => {
+                const [sh, sm] = (s.start_time || '00:00').split(':').map(Number);
+                const [eh, em] = (s.end_time   || '00:00').split(':').map(Number);
+                const startMin = sh * 60 + sm;
+                const endMin   = eh * 60 + em;
+                // Handle overnight shifts (e.g. 20:00 – 06:00)
+                return endMin > startMin
+                    ? nowMin >= startMin && nowMin < endMin
+                    : nowMin >= startMin || nowMin < endMin;
+            });
+            if (active) {
+                this.selectedShiftId  = String(active.id);
+                this.currentShiftName = active.name;
+            }
         },
 
         // ── Data fetching ─────────────────────────────────────

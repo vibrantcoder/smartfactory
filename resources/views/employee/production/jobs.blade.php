@@ -76,7 +76,7 @@
                 <span class="text-xs font-semibold px-2.5 py-1 rounded-full {{ $statusBadge }}">
                     {{ ucfirst(str_replace('_', ' ', $plan->status)) }}
                 </span>
-                <span class="text-xs text-gray-400">{{ $plan->planned_date->format('d M Y') }}</span>
+                <span class="text-xs text-gray-400">{{ \Carbon\Carbon::parse($plan->planned_date)->format('d M Y') }}</span>
             </div>
         </div>
 

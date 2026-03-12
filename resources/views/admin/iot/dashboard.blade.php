@@ -1309,7 +1309,32 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this.loadShifts(machineFid),
                 this.loadOee(machineFid),
             ]);
+            // Auto-select the shift that covers the current time
+            this.autoSelectShift();
             await this.loadChart(machine.id);
+        },
+
+        // Find and select the shift whose window contains the current local time.
+        autoSelectShift() {
+            if (!this.shifts.length) return;
+            const now    = new Date();
+            const nowMin = now.getHours() * 60 + now.getMinutes();
+            const active = this.shifts.find(s => {
+                const [sh, sm] = (s.start_time || '00:00').split(':').map(Number);
+                const [eh, em] = (s.end_time   || '00:00').split(':').map(Number);
+                const startMin = sh * 60 + sm;
+                const endMin   = eh * 60 + em;
+                if (endMin > startMin) {
+                    // Normal shift (e.g., 08:00 – 20:00)
+                    return nowMin >= startMin && nowMin < endMin;
+                } else {
+                    // Overnight shift (e.g., 20:00 – 06:00)
+                    return nowMin >= startMin || nowMin < endMin;
+                }
+            });
+            if (active) {
+                this.selectedShiftId = String(active.id);
+            }
         },
 
         async selectMachineById(machineId) {

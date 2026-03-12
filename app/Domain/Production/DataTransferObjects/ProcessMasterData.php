@@ -60,7 +60,7 @@ readonly class ProcessMasterData
         return [
             'name'                 => $this->name,
             'code'                 => $this->code,
-            'standard_time'        => $this->standardTime,
+            'standard_time'        => $this->standardTime ?? 0, // NOT NULL column — default to 0
             'machine_type_default' => $this->machineTypeDefault,
             'process_type'         => $this->processType,
             'description'          => $this->description,

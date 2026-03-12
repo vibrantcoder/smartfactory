@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1\Iot;
 use App\Domain\Analytics\Models\MachineOeeShift;
 use App\Domain\Analytics\Services\OeeCalculationService;
 use App\Domain\Machine\Models\Machine;
+use App\Domain\Machine\Models\IotLog;
 use App\Domain\Production\Models\ProductionPlan;
 use App\Domain\Production\Models\Shift;
 use App\Http\Controllers\Controller;
@@ -14,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * OeeController
@@ -264,7 +266,8 @@ class OeeController extends Controller
         $days  = min(90, max(7, $request->integer('days', 30)));
         $start = Carbon::today()->subDays($days - 1);
 
-        $rows = MachineOeeShift::where('factory_id', $factoryId)
+        // Fetch aggregated rows from the summary table
+        $aggregated = MachineOeeShift::where('factory_id', $factoryId)
             ->where('oee_date', '>=', $start->toDateString())
             ->where('oee_date', '<=', Carbon::today()->toDateString())
             ->selectRaw('
@@ -279,7 +282,57 @@ class OeeController extends Controller
             ')
             ->groupBy('oee_date')
             ->orderBy('oee_date')
-            ->get();
+            ->get()
+            ->keyBy('oee_date');
+
+        // For dates missing from the summary table, fall back to iot_logs
+        // (only availability proxy: running_minutes / total_minutes, no performance/quality)
+        $aggregatedDates = $aggregated->keys()->all();
+        $allDates        = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $allDates[] = Carbon::today()->subDays($i)->toDateString();
+        }
+        $missingDates = array_diff($allDates, $aggregatedDates);
+
+        if (!empty($missingDates)) {
+            $liveRows = DB::table('iot_logs')
+                ->where('factory_id', $factoryId)
+                ->whereIn(DB::raw('DATE(logged_at)'), $missingDates)
+                ->selectRaw('
+                    DATE(logged_at)                     as oee_date,
+                    COUNT(*)                            as log_count,
+                    SUM(part_count)                     as total_parts,
+                    SUM(part_reject)                    as total_rejects,
+                    SUM(CASE WHEN alarm_code = 0 THEN 1 ELSE 0 END) as running_logs,
+                    COUNT(DISTINCT machine_id)          as machine_count
+                ')
+                ->groupBy(DB::raw('DATE(logged_at)'))
+                ->orderBy('oee_date')
+                ->get();
+
+            foreach ($liveRows as $row) {
+                $availability = $row->log_count > 0
+                    ? round(($row->running_logs / $row->log_count) * 100, 1)
+                    : null;
+                $quality = ($row->total_parts > 0)
+                    ? round((($row->total_parts - $row->total_rejects) / $row->total_parts) * 100, 1)
+                    : null;
+
+                $aggregated->put($row->oee_date, (object) [
+                    'oee_date'         => $row->oee_date,
+                    'avg_availability' => $availability,
+                    'avg_performance'  => null,   // needs production plan / cycle time
+                    'avg_quality'      => $quality,
+                    'avg_oee'          => null,
+                    'machine_count'    => $row->machine_count,
+                    'total_parts'      => $row->total_parts,
+                    'good_parts'       => $row->total_parts - $row->total_rejects,
+                ]);
+            }
+        }
+
+        // Sort by date and return
+        $rows = $aggregated->sortKeys()->values();
 
         return response()->json([
             'factory_id' => $factoryId,

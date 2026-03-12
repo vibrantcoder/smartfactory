@@ -923,8 +923,9 @@
 
                     {{-- Counters --}}
                     <div class="mt-3 border-t border-gray-100 pt-2 flex justify-between text-xs text-gray-600">
-                        <span>Parts</span>
-                        <span class="font-mono font-semibold" x-text="m.part_count.toLocaleString()"></span>
+                        <span>Parts today</span>
+                        <span class="font-mono font-semibold"
+                              x-text="getMachineTotalParts(m.id) !== null ? getMachineTotalParts(m.id).toLocaleString() : m.part_count.toLocaleString()"></span>
                     </div>
                     <div class="flex justify-between text-xs text-gray-500">
                         <span>Rejects</span>
@@ -934,8 +935,30 @@
                     {{-- Last seen --}}
                     <p class="mt-1 text-xs text-gray-400" x-text="m.last_seen ? timeAgo(m.last_seen) : 'No data'"></p>
 
-                    {{-- Today's OEE badge --}}
-                    <template x-if="getMachineOee(m.id) !== null">
+                    {{-- Production Progress --}}
+                    <template x-if="getMachineProgress(m.id)">
+                        <div class="mt-3 border-t border-gray-100 pt-2">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400"
+                                      x-text="getMachineProgress(m.id).shiftName"></span>
+                                <span class="text-[10px] font-bold"
+                                      :class="getMachineProgress(m.id).pct >= 100 ? 'text-emerald-600' : getMachineProgress(m.id).pct >= 75 ? 'text-indigo-600' : getMachineProgress(m.id).pct >= 50 ? 'text-amber-600' : 'text-red-500'"
+                                      x-text="getMachineProgress(m.id).pct + '%'"></span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-1.5 mb-1.5 overflow-hidden">
+                                <div class="h-1.5 rounded-full transition-all duration-500"
+                                     :class="getMachineProgress(m.id).pct >= 100 ? 'bg-emerald-500' : getMachineProgress(m.id).pct >= 75 ? 'bg-indigo-500' : getMachineProgress(m.id).pct >= 50 ? 'bg-amber-500' : 'bg-red-500'"
+                                     :style="'width:' + getMachineProgress(m.id).pct + '%'"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-gray-400">
+                                <span x-text="getMachineProgress(m.id).produced.toLocaleString() + ' pcs'"></span>
+                                <span x-text="'/ ' + getMachineProgress(m.id).planned.toLocaleString()"></span>
+                            </div>
+                        </div>
+                    </template>
+
+                    {{-- OEE badge (shown when no plan progress available) --}}
+                    <template x-if="!getMachineProgress(m.id) && getMachineOee(m.id) !== null">
                         <div class="mt-2 flex items-center justify-between">
                             <span class="text-xs text-gray-400">OEE today</span>
                             <span class="text-xs font-bold rounded-full px-2 py-0.5"
@@ -1119,7 +1142,7 @@
             </div>
             <div x-show="!trendLoading && trendData.length === 0"
                  class="flex items-center justify-center h-40 text-gray-400 text-sm">
-                No historical OEE data yet. Run <code class="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">php artisan iot:aggregate-oee</code> to populate.
+                No IoT data found for the selected period.
             </div>
 
             {{-- Legend --}}
@@ -1234,6 +1257,12 @@ function iotDashboard(apiToken, factoryId, factories) {
             return this.oeeData.reduce((sum, m) =>
                 sum + m.shifts.reduce((s, sh) => s + (sh.total_parts || 0), 0), 0);
         },
+
+        getMachineTotalParts(machineId) {
+            const m = this.oeeData.find(m => m.machine.id === machineId);
+            if (!m) return null;
+            return m.shifts.reduce((s, sh) => s + (sh.total_parts || 0), 0);
+        },
         get fleetAvgOee() {
             const vals = this.oeeData.flatMap(m => m.shifts.map(s => s.oee_pct)).filter(v => v !== null);
             if (!vals.length) return null;
@@ -1266,8 +1295,10 @@ function iotDashboard(apiToken, factoryId, factories) {
         get shiftProgress() {
             const s = this.machineSelectedOee;
             if (!s || !s.planned_qty || s.planned_qty === 0) return null;
-            const pct = Math.min(100, Math.round(s.total_parts / s.planned_qty * 100));
-            return { planned: s.planned_qty, actual: s.total_parts, pct };
+            // Use live IoT total from chart API (same source as the Parts KPI in the header)
+            const actual = this.chartData?.summary?.total_parts ?? s.total_parts ?? 0;
+            const pct    = Math.min(100, Math.round(actual / s.planned_qty * 100));
+            return { planned: s.planned_qty, actual, pct };
         },
 
         get selectedShiftObj() {
@@ -1539,6 +1570,20 @@ function iotDashboard(apiToken, factoryId, factories) {
             if (!m) return null;
             const best = m.shifts.find(s => s.oee_pct !== null);
             return best ? best.oee_pct : null;
+        },
+
+        // Production progress for a machine card — finds the shift with a plan
+        getMachineProgress(machineId) {
+            const m = this.oeeData.find(m => m.machine.id === machineId);
+            if (!m) return null;
+            // Prefer the shift with the highest planned_qty (most active plan)
+            const shift = m.shifts.filter(s => s.planned_qty > 0)
+                                   .sort((a, b) => b.planned_qty - a.planned_qty)[0];
+            if (!shift) return null;
+            const produced = shift.total_parts || 0;
+            const planned  = shift.planned_qty;
+            const pct      = Math.min(100, Math.round(produced / planned * 100));
+            return { produced, planned, pct, shiftName: shift.shift_name };
         },
 
         // Find and select the shift whose window contains the current local time.

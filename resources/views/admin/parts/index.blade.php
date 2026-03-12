@@ -985,9 +985,12 @@ function partsPage(apiToken, factoryId, factories) {
                 const data = await res.json();
                 if (!res.ok) { this.formError = this.extractError(data); return; }
 
+                // PartResource wraps in { data: { id, ... } }
+                const partId = data.data?.id ?? data.id;
+
                 // Upload any selected drawings
                 if (this.createFiles && this.createFiles.length > 0) {
-                    await this._uploadFiles(data.id, this.createFiles);
+                    await this._uploadFiles(partId, this.createFiles);
                 }
 
                 this.showCreate = false;

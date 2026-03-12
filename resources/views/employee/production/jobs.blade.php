@@ -70,6 +70,7 @@
                 <p class="text-xs text-gray-500 mt-0.5">
                     Part #{{ $plan->part?->part_number }}
                     &middot; Cycle: {{ $plan->part?->cycle_time_std ?? '—' }}s
+                    @if($plan->machine) &middot; {{ $plan->machine->name }} @endif
                 </p>
             </div>
             <div class="flex flex-col items-end gap-1.5 shrink-0">

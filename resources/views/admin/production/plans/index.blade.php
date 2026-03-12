@@ -1741,6 +1741,8 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
 
                 const body = { ...this.form };
                 if (!isCreate) delete body.factory_id;
+                if (!body.operator_id)     body.operator_id     = null;
+                if (!body.part_process_id) body.part_process_id = null;
 
                 const res = await fetch(url, {
                     method:  isCreate ? 'POST' : 'PUT',
@@ -1761,12 +1763,12 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
                 }
 
                 this.showModal = false;
-                await this.loadPlans();
             } catch (e) {
                 this.formError = e.message;
             } finally {
                 this.saving = false;
             }
+            this.loadPlans();
         },
 
         async deletePlan() {

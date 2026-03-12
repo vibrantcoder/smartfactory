@@ -27,7 +27,7 @@ class DashboardController extends Controller
                 'shift:id,name,start_time,end_time',
                 'actuals',
             ])
-            ->where('machine_id', $user->machine_id)
+            ->where('operator_id', $user->id)
             ->whereDate('planned_date', '>=', now()->toDateString())
             ->whereDate('planned_date', '<=', now()->addDays(2)->toDateString())
             ->whereIn('status', ['draft', 'scheduled', 'in_progress'])

@@ -18,9 +18,10 @@ class JobsController extends Controller
         $plans = ProductionPlan::with([
                 'part:id,name,part_number,cycle_time_std',
                 'shift:id,name,start_time,end_time',
+                'machine:id,name,code',
                 'actuals',
             ])
-            ->where('machine_id', $user->machine_id)
+            ->where('operator_id', $user->id)
             ->whereDate('planned_date', '>=', now()->subDays(7)->toDateString())
             ->whereDate('planned_date', '<=', now()->addDays(14)->toDateString())
             ->orderByDesc('planned_date')

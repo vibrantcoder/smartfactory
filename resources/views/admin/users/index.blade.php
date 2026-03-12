@@ -302,44 +302,6 @@
     </template>
 
 
-    {{-- ASSIGN MACHINE MODAL --}}
-    <template x-if="machineModal.open">
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-             @click.self="machineModal.open = false">
-            <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-                <h3 class="text-base font-semibold text-gray-900 mb-1">Assign Machine</h3>
-                <p class="text-sm text-gray-500 mb-4">
-                    Set the machine for <strong x-text="machineModal.user?.name"></strong>
-                </p>
-                <div class="mb-5">
-                    <label class="block text-xs font-medium text-gray-700 mb-1">Machine</label>
-                    <template x-if="machineModal.loadingMachines">
-                        <p class="text-sm text-gray-400 italic">Loading machines…</p>
-                    </template>
-                    <template x-if="!machineModal.loadingMachines">
-                        <select x-model="machineModal.selectedMachineId"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400">
-                            <option value="">— No machine assigned —</option>
-                            <template x-for="m in machineModal.machines" :key="m.id">
-                                <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
-                            </template>
-                        </select>
-                    </template>
-                </div>
-                <div class="flex items-center gap-3 justify-end">
-                    <button @click="machineModal.open = false"
-                            class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">Cancel</button>
-                    <button @click="submitMachineAssign()"
-                            :disabled="machineModal.saving || machineModal.loadingMachines"
-                            class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors">
-                        <span x-show="!machineModal.saving">Save</span>
-                        <span x-show="machineModal.saving">Saving…</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </template>
-
     {{-- ASSIGN ROLE MODAL --}}
     <template x-if="roleModal.open">
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -378,7 +340,7 @@
                                            ? 'border-red-300 bg-red-50'
                                            : 'border-gray-200 hover:border-gray-300'">
                                     <input type="radio" value="" x-model="roleModal.selectedRole"
-                                           @change="roleModal.machines = []"
+                                           @change=""
                                            class="text-red-500 focus:ring-red-400">
                                     <div>
                                         <p class="text-sm font-medium text-gray-700">No Role</p>
@@ -392,7 +354,7 @@
                                                ? 'border-indigo-400 bg-indigo-50'
                                                : 'border-gray-200 hover:border-indigo-200'">
                                         <input type="radio" :value="r.value" x-model="roleModal.selectedRole"
-                                               @change="onRoleModalRoleChange()"
+                                               @change=""
                                                class="text-indigo-600 focus:ring-indigo-500">
                                         <div>
                                             <p class="text-sm font-medium text-gray-700" x-text="r.label"></p>
@@ -402,25 +364,6 @@
                             </div>
                         </template>
                     </div>
-
-                    {{-- Machine dropdown — only for operator/viewer --}}
-                    <template x-if="roleModal.selectedRole === 'operator' || roleModal.selectedRole === 'viewer'">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Assign Machine</p>
-                            <template x-if="roleModal.loadingMachines">
-                                <p class="text-sm text-gray-400 animate-pulse">Loading machines…</p>
-                            </template>
-                            <template x-if="!roleModal.loadingMachines">
-                                <select x-model="roleModal.machineId"
-                                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400">
-                                    <option value="">— No machine —</option>
-                                    <template x-for="m in roleModal.machines" :key="m.id">
-                                        <option :value="m.id" x-text="m.name + (m.code ? ' (' + m.code + ')' : '')"></option>
-                                    </template>
-                                </select>
-                            </template>
-                        </div>
-                    </template>
 
                     {{-- Error --}}
                     <template x-if="roleModal.error">
@@ -587,11 +530,6 @@ function userManager(apiToken, isSuperAdmin, factories, permissionGroups) {
             open: false, saving: false, user: null, error: null,
             assignableRoles: [], loadingRoles: false,
             selectedRole: '',
-            machines: [], loadingMachines: false, machineId: '',
-        },
-machineModal: {
-            open: false, saving: false, user: null,
-            machines: [], loadingMachines: false, selectedMachineId: '',
         },
         permDrawer: {
             open: false, loading: false, saving: false, user: null,
@@ -730,7 +668,6 @@ machineModal: {
                 open: true, saving: false, user,
                 assignableRoles: [], loadingRoles: true,
                 selectedRole: user.role ?? '',
-                machines: [], loadingMachines: false, machineId: user.machine_id ?? '',
                 error: null,
             };
             try {
@@ -742,41 +679,18 @@ machineModal: {
             } finally {
                 this.roleModal.loadingRoles = false;
             }
-            // Auto-load machines if current role is operator/viewer
-            if (this.roleModal.selectedRole === 'operator' || this.roleModal.selectedRole === 'viewer') {
-                await this.loadRoleModalMachines(user);
-            }
-        },
-
-        async onRoleModalRoleChange() {
-            const role = this.roleModal.selectedRole;
-            if (role === 'operator' || role === 'viewer') {
-                await this.loadRoleModalMachines(this.roleModal.user);
-            } else {
-                this.roleModal.machines = [];
-            }
-        },
-
-        async loadRoleModalMachines(user) {
-            this.roleModal.loadingMachines = true;
-            try {
-                const factoryParam = user.factory_id ? `&factory_id=${user.factory_id}` : '';
-                const res  = await fetch(`/api/v1/machines?per_page=200&status=active${factoryParam}`, { headers: this.headers });
-                const data = await res.json();
-                this.roleModal.machines = data.data ?? [];
-            } catch (e) { /* non-fatal */ }
-            finally { this.roleModal.loadingMachines = false; }
         },
 
         async submitRoleAssign() {
             this.roleModal.saving = true;
             this.roleModal.error  = null;
-            try {
-                const u        = this.roleModal.user;
-                const newRole  = this.roleModal.selectedRole;
-                const origRole = u.role ?? '';
+            const u        = this.roleModal.user;
+            const newRole  = this.roleModal.selectedRole;
+            const origRole = u.role ?? '';
+            let saved = true;
 
-                // 1. Role assignment / revocation
+            try {
+                // Role assignment / revocation
                 if (newRole !== origRole) {
                     if (newRole) {
                         const r = await fetch(`/admin/users/${u.id}/assign-role`, {
@@ -785,98 +699,37 @@ machineModal: {
                             body:    JSON.stringify({ role: newRole }),
                         });
                         if (!r.ok) {
-                            const d = await r.json();
+                            const d = await r.json().catch(() => ({}));
                             this.roleModal.error = d.message ?? 'Failed to assign role.';
-                            return;
+                            saved = false;
                         }
                     } else {
                         const r = await fetch(`/admin/users/${u.id}/revoke-role`, {
                             method: 'DELETE', headers: this.headers,
                         });
                         if (!r.ok) {
-                            const d = await r.json();
+                            const d = await r.json().catch(() => ({}));
                             this.roleModal.error = d.message ?? 'Failed to revoke role.';
-                            return;
+                            saved = false;
                         }
                     }
                 }
-
-                // 2. Machine assignment for operator/viewer
-                if (newRole === 'operator' || newRole === 'viewer') {
-                    await fetch(`/admin/users/${u.id}/assign-machine`, {
-                        method:  'POST',
-                        headers: this.headers,
-                        body:    JSON.stringify({ machine_id: this.roleModal.machineId || null }),
-                    });
-                }
-
-                // 3. Update user row in-place (no full reload needed)
-                const idx = this.users.findIndex(uu => uu.id === u.id);
-                if (idx !== -1) {
-                    const roleLabel = newRole
-                        ? (this.roleModal.assignableRoles.find(r => r.value === newRole)?.label ?? newRole)
-                        : null;
-                    this.users[idx].role       = newRole || null;
-                    this.users[idx].role_label = roleLabel;
-                    if (newRole === 'operator' || newRole === 'viewer') {
-                        this.users[idx].machine_id = this.roleModal.machineId || null;
-                    }
-                }
-
-                this.roleModal.open = false;
-                this.setFlash('success', newRole
-                    ? `Role assigned to ${u.name}.`
-                    : `Role revoked from ${u.name}.`);
             } catch (e) {
-                this.roleModal.error = 'Network error. Please retry.';
+                this.roleModal.error = e.message || 'Network error. Please retry.';
+                saved = false;
             } finally {
                 this.roleModal.saving = false;
             }
-        },
 
-        async openMachineModal(user) {
-            this.machineModal = {
-                open: true, saving: false, user,
-                machines: [], loadingMachines: true,
-                selectedMachineId: user.machine_id ?? '',
-            };
-            try {
-                const factoryParam = user.factory_id ? `&factory_id=${user.factory_id}` : '';
-                const res  = await fetch(`/api/v1/machines?per_page=200&status=active${factoryParam}`, { headers: this.headers });
-                const data = await res.json();
-                this.machineModal.machines = data.data ?? [];
-            } catch (e) {
-                this.setFlash('error', 'Could not load machines.');
-                this.machineModal.open = false;
-            } finally {
-                this.machineModal.loadingMachines = false;
-            }
-        },
+            if (!saved) return;
 
-        async submitMachineAssign() {
-            this.machineModal.saving = true;
-            try {
-                const body = { machine_id: this.machineModal.selectedMachineId || null };
-                const res  = await fetch(`/admin/users/${this.machineModal.user.id}/assign-machine`, {
-                    method:  'POST',
-                    headers: this.headers,
-                    body:    JSON.stringify(body),
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    this.setFlash('error', data.message ?? 'Failed to assign machine.');
-                } else {
-                    this.setFlash('success', data.message);
-                    this.machineModal.open = false;
-                    // Update user row in place
-                    const idx = this.users.findIndex(u => u.id === this.machineModal.user.id);
-                    if (idx !== -1) this.users[idx].machine_id = data.machine_id;
-                }
-            } catch (e) {
-                this.setFlash('error', 'Network error. Please retry.');
-            } finally {
-                this.machineModal.saving = false;
-            }
+            this.roleModal.open = false;
+            this.setFlash('success', newRole
+                ? `Role assigned to ${u.name}.`
+                : `Role revoked from ${u.name}.`);
+
+            // Reload users to reflect new role
+            this.loadUsers(this.pagination?.current_page ?? 1);
         },
 
         async openPermDrawer(user) {

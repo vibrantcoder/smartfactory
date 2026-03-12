@@ -8,6 +8,7 @@ use App\Domain\Machine\Models\Machine;
 use App\Domain\Shared\Models\BaseModel;
 use App\Domain\Shared\Traits\BelongsToFactory;
 use App\Domain\Shared\Traits\HasFactoryScope;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -50,6 +51,7 @@ class ProductionPlan extends BaseModel
         'part_process_id',
         'work_order_id',
         'shift_id',
+        'operator_id',
         'planned_date',
         'planned_qty',
         'status',
@@ -91,6 +93,11 @@ class ProductionPlan extends BaseModel
     public function workOrder(): BelongsTo
     {
         return $this->belongsTo(WorkOrder::class, 'work_order_id');
+    }
+
+    public function operator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'operator_id');
     }
 
     public function actuals(): HasMany

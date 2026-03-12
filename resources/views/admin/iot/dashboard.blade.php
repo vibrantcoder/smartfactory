@@ -408,6 +408,111 @@
                 </template>
             </div>
 
+            {{-- ── Row 0b: MTBF / MTTR + Production Progress ── --}}
+            <div class="grid grid-cols-2 gap-5">
+
+                {{-- MTBF & MTTR (from timeline segments) --}}
+                <div class="bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
+                    <div class="flex items-center gap-2 mb-4">
+                        <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Reliability Metrics</h3>
+                        <span class="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-xs font-medium text-amber-400">ISO 22400</span>
+                    </div>
+                    <template x-if="!timelineData || !machineMtbfMttr">
+                        <p class="text-slate-600 text-sm text-center py-4">No timeline data for this period</p>
+                    </template>
+                    <template x-if="machineMtbfMttr">
+                        <div class="grid grid-cols-3 divide-x divide-slate-700/50">
+                            {{-- Alarm Events --}}
+                            <div class="text-center px-3">
+                                <p class="text-xs uppercase tracking-widest text-slate-500 mb-1">Fault Events</p>
+                                <p class="text-3xl font-extrabold leading-none"
+                                   :class="machineMtbfMttr.alarmCount === 0 ? 'text-emerald-400' : machineMtbfMttr.alarmCount <= 2 ? 'text-amber-400' : 'text-red-400'"
+                                   x-text="machineMtbfMttr.alarmCount"></p>
+                                <p class="text-xs text-slate-600 mt-1">occurrences</p>
+                            </div>
+                            {{-- MTBF --}}
+                            <div class="text-center px-3">
+                                <p class="text-xs uppercase tracking-widest text-slate-500 mb-1">MTBF</p>
+                                <template x-if="machineMtbfMttr.mtbf !== null">
+                                    <div>
+                                        <p class="text-3xl font-extrabold leading-none text-indigo-400"
+                                           x-text="machineMtbfMttr.mtbf >= 60 ? Math.floor(machineMtbfMttr.mtbf/60) + 'h' : machineMtbfMttr.mtbf + 'm'"></p>
+                                        <p class="text-xs text-slate-600 mt-1">mean run between faults</p>
+                                    </div>
+                                </template>
+                                <template x-if="machineMtbfMttr.mtbf === null">
+                                    <div>
+                                        <p class="text-2xl font-bold text-emerald-400">✓</p>
+                                        <p class="text-xs text-slate-600 mt-1">no faults</p>
+                                    </div>
+                                </template>
+                            </div>
+                            {{-- MTTR --}}
+                            <div class="text-center px-3">
+                                <p class="text-xs uppercase tracking-widest text-slate-500 mb-1">MTTR</p>
+                                <p class="text-3xl font-extrabold leading-none"
+                                   :class="machineMtbfMttr.mttr === 0 ? 'text-emerald-400' : machineMtbfMttr.mttr <= 10 ? 'text-amber-400' : 'text-red-400'"
+                                   x-text="machineMtbfMttr.mttr >= 60 ? Math.floor(machineMtbfMttr.mttr/60) + 'h' : machineMtbfMttr.mttr + 'm'"></p>
+                                <p class="text-xs text-slate-600 mt-1">avg repair/recovery time</p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {{-- Production Progress (actual vs planned) --}}
+                <div class="bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Production Progress</h3>
+                            <span class="rounded-full bg-green-500/15 border border-green-500/30 px-2 py-0.5 text-xs font-medium text-green-400"
+                                  x-text="selectedShiftObj ? selectedShiftObj.name : 'Best Shift'"></span>
+                        </div>
+                        <span class="text-xs text-slate-600" x-text="chartDate"></span>
+                    </div>
+                    <template x-if="!shiftProgress">
+                        <div class="flex flex-col items-center justify-center py-4 text-slate-600">
+                            <svg class="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p class="text-sm">No production plan for this shift</p>
+                            <p class="text-xs mt-0.5 text-slate-700">Assign a plan with planned qty to see progress</p>
+                        </div>
+                    </template>
+                    <template x-if="shiftProgress">
+                        <div>
+                            {{-- Progress bar --}}
+                            <div class="flex items-end justify-between mb-2">
+                                <span class="text-4xl font-extrabold leading-none"
+                                      :class="shiftProgress.pct >= 100 ? 'text-emerald-400' : shiftProgress.pct >= 75 ? 'text-indigo-400' : shiftProgress.pct >= 50 ? 'text-amber-400' : 'text-red-400'"
+                                      x-text="shiftProgress.pct + '%'"></span>
+                                <span class="text-xs text-slate-500" x-text="'Target: ' + shiftProgress.planned.toLocaleString() + ' pcs'"></span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden mb-3">
+                                <div class="h-4 rounded-full transition-all duration-500"
+                                     :class="shiftProgress.pct >= 100 ? 'bg-emerald-500' : shiftProgress.pct >= 75 ? 'bg-indigo-500' : shiftProgress.pct >= 50 ? 'bg-amber-500' : 'bg-red-500'"
+                                     :style="'width: ' + shiftProgress.pct + '%'"></div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3 text-center">
+                                <div>
+                                    <p class="text-xs text-slate-500 uppercase tracking-wide">Planned</p>
+                                    <p class="text-lg font-bold text-slate-300" x-text="shiftProgress.planned.toLocaleString()"></p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 uppercase tracking-wide">Produced</p>
+                                    <p class="text-lg font-bold text-white" x-text="shiftProgress.actual.toLocaleString()"></p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-500 uppercase tracking-wide">Gap</p>
+                                    <p class="text-lg font-bold"
+                                       :class="shiftProgress.planned - shiftProgress.actual > 0 ? 'text-red-400' : 'text-emerald-400'"
+                                       x-text="(shiftProgress.planned - shiftProgress.actual > 0 ? '-' : '+') + Math.abs(shiftProgress.planned - shiftProgress.actual).toLocaleString()"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
             {{-- Row 1: OEE Shift Breakdown + Live Telemetry --}}
             <div class="grid grid-cols-3 gap-5">
 
@@ -676,10 +781,6 @@
                 <span class="h-2 w-2 rounded-full bg-red-500"></span>
                 Alarm: <span x-text="statusCounts.alarm ?? 0"></span>
             </span>
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
-                <span class="h-2 w-2 rounded-full bg-blue-400"></span>
-                Standby: <span x-text="statusCounts.standby ?? 0"></span>
-            </span>
             <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
                 <span class="h-2 w-2 rounded-full bg-gray-400"></span>
                 Offline: <span x-text="statusCounts.offline ?? 0"></span>
@@ -709,6 +810,73 @@
 
     {{-- ── Error banner ─────────────────────────────────────── --}}
     <div x-show="error" x-cloak class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" x-text="error"></div>
+
+    {{-- ── Fleet KPI Summary ─────────────────────────────────── --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+        {{-- Machines Running --}}
+        <div class="rounded-xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-4 flex items-center gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100">
+                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Running Now</p>
+                <p class="text-3xl font-extrabold text-gray-900 leading-none mt-0.5" x-text="statusCounts.running ?? 0"></p>
+                <p class="text-xs text-gray-400 mt-0.5" x-text="'of ' + machines.length + ' machines'"></p>
+            </div>
+        </div>
+
+        {{-- Active Alarms --}}
+        <div class="rounded-xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-4 flex items-center gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                 :class="(statusCounts.alarm ?? 0) > 0 ? 'bg-red-100' : 'bg-gray-100'">
+                <svg class="h-6 w-6" :class="(statusCounts.alarm ?? 0) > 0 ? 'text-red-600 alarm-blink' : 'text-gray-400'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Active Alarms</p>
+                <p class="text-3xl font-extrabold leading-none mt-0.5"
+                   :class="(statusCounts.alarm ?? 0) > 0 ? 'text-red-600' : 'text-gray-900'"
+                   x-text="statusCounts.alarm ?? 0"></p>
+                <p class="text-xs text-gray-400 mt-0.5" x-text="(statusCounts.idle ?? 0) + ' idle'"></p>
+            </div>
+        </div>
+
+        {{-- Total Parts Today --}}
+        <div class="rounded-xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-4 flex items-center gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
+                <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Parts Today</p>
+                <p class="text-3xl font-extrabold text-gray-900 leading-none mt-0.5" x-text="fleetTotalPartsToday.toLocaleString()"></p>
+                <p class="text-xs text-gray-400 mt-0.5" x-text="oeeDate"></p>
+            </div>
+        </div>
+
+        {{-- Fleet Avg OEE --}}
+        <div class="rounded-xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-4 flex items-center gap-4">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                 :class="fleetAvgOee === null ? 'bg-gray-100' : fleetAvgOee >= 85 ? 'bg-emerald-100' : fleetAvgOee >= 60 ? 'bg-amber-100' : 'bg-red-100'">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                     :class="fleetAvgOee === null ? 'text-gray-400' : fleetAvgOee >= 85 ? 'text-emerald-600' : fleetAvgOee >= 60 ? 'text-amber-600' : 'text-red-600'">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Fleet OEE</p>
+                <p class="text-3xl font-extrabold leading-none mt-0.5"
+                   :class="fleetAvgOee === null ? 'text-gray-400' : fleetAvgOee >= 85 ? 'text-emerald-600' : fleetAvgOee >= 60 ? 'text-amber-600' : 'text-red-600'"
+                   x-text="fleetAvgOee !== null ? fleetAvgOee + '%' : '—'"></p>
+                <p class="text-xs text-gray-400 mt-0.5" x-text="fleetAvgAvail !== null ? 'Avail: ' + fleetAvgAvail + '%' : 'No OEE data'"></p>
+            </div>
+        </div>
+    </div>
 
     {{-- ── Machine grid ──────────────────────────────────────── --}}
     <div>
@@ -765,6 +933,16 @@
 
                     {{-- Last seen --}}
                     <p class="mt-1 text-xs text-gray-400" x-text="m.last_seen ? timeAgo(m.last_seen) : 'No data'"></p>
+
+                    {{-- Today's OEE badge --}}
+                    <template x-if="getMachineOee(m.id) !== null">
+                        <div class="mt-2 flex items-center justify-between">
+                            <span class="text-xs text-gray-400">OEE today</span>
+                            <span class="text-xs font-bold rounded-full px-2 py-0.5"
+                                  :class="getMachineOee(m.id) >= 85 ? 'bg-emerald-100 text-emerald-700' : getMachineOee(m.id) >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'"
+                                  x-text="getMachineOee(m.id) + '%'"></span>
+                        </div>
+                    </template>
 
                     {{-- Click hint --}}
                     <div class="mt-2 text-xs text-indigo-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1051,6 +1229,47 @@ function iotDashboard(apiToken, factoryId, factories) {
             };
         },
 
+        // ── Fleet summary (main dashboard) ───────────────────
+        get fleetTotalPartsToday() {
+            return this.oeeData.reduce((sum, m) =>
+                sum + m.shifts.reduce((s, sh) => s + (sh.total_parts || 0), 0), 0);
+        },
+        get fleetAvgOee() {
+            const vals = this.oeeData.flatMap(m => m.shifts.map(s => s.oee_pct)).filter(v => v !== null);
+            if (!vals.length) return null;
+            return Math.round(vals.reduce((s, v) => s + v, 0) / vals.length);
+        },
+        get fleetAvgAvail() {
+            const vals = this.oeeData.flatMap(m => m.shifts.map(s => s.availability_pct)).filter(v => v !== null);
+            if (!vals.length) return null;
+            return Math.round(vals.reduce((s, v) => s + v, 0) / vals.length);
+        },
+
+        // ── MTBF / MTTR from timeline segments ───────────────
+        get machineMtbfMttr() {
+            const segs = this.timelineData?.segments;
+            if (!segs?.length) return null;
+            const alarmSegs = segs.filter(s => s.state === 'alarm');
+            const runSegs   = segs.filter(s => s.state === 'running');
+            const totalRunMin   = runSegs.reduce((s, r) => s + r.duration_min, 0);
+            const totalAlarmMin = alarmSegs.reduce((s, a) => s + a.duration_min, 0);
+            return {
+                alarmCount: alarmSegs.length,
+                // MTBF = total run time / number of failures
+                mtbf: alarmSegs.length > 0 ? Math.round(totalRunMin / alarmSegs.length) : null,
+                // MTTR = total alarm time / number of failures
+                mttr: alarmSegs.length > 0 ? Math.round(totalAlarmMin / alarmSegs.length) : 0,
+            };
+        },
+
+        // ── Production progress for selected shift ────────────
+        get shiftProgress() {
+            const s = this.machineSelectedOee;
+            if (!s || !s.planned_qty || s.planned_qty === 0) return null;
+            const pct = Math.min(100, Math.round(s.total_parts / s.planned_qty * 100));
+            return { planned: s.planned_qty, actual: s.total_parts, pct };
+        },
+
         get selectedShiftObj() {
             if (!this.selectedShiftId) return null;
             return this.shifts.find(s => s.id == this.selectedShiftId) || null;
@@ -1312,6 +1531,14 @@ function iotDashboard(apiToken, factoryId, factories) {
             // Auto-select the shift that covers the current time
             this.autoSelectShift();
             await this.loadChart(machine.id);
+        },
+
+        // Today's best OEE% for a machine (used on machine cards)
+        getMachineOee(machineId) {
+            const m = this.oeeData.find(m => m.machine.id === machineId);
+            if (!m) return null;
+            const best = m.shifts.find(s => s.oee_pct !== null);
+            return best ? best.oee_pct : null;
         },
 
         // Find and select the shift whose window contains the current local time.

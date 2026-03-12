@@ -47,6 +47,7 @@
         {{ $machines->toJson() }},
         {{ $shifts->toJson() }},
         {{ $parts->toJson() }},
+        {{ $operators->toJson() }},
         {{ json_encode($weekOffDays) }},
         {{ json_encode($holidays) }}
     )"
@@ -140,7 +141,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-500 mb-1">Production Date</label>
-                        <input type="date" x-model="form.planned_date" @change="checkPlanAvailability()"
+                        <input type="date" x-model="form.planned_date" @change="checkPlanAvailability(); loadOperatorOee()"
                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
                     </div>
                     <div>
@@ -272,6 +273,67 @@
                     </div>
                 </div>
 
+                {{-- Operator / Employee --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">
+                        Operator <span class="text-gray-300 font-normal">(optional)</span>
+                    </label>
+                    <select x-model="form.operator_id" @change="loadOperatorOee()"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300">
+                        <option value="">— No operator assigned —</option>
+                        <template x-for="op in operators" :key="op.id">
+                            <option :value="op.id" x-text="op.name + (op.machine_id ? ' · M#' + op.machine_id : '')"></option>
+                        </template>
+                    </select>
+                </div>
+
+                {{-- Operator OEE panel (shown when operator selected) --}}
+                <template x-if="form.operator_id && operatorOee">
+                    <div class="rounded-xl border border-indigo-100 bg-indigo-50/60 overflow-hidden">
+                        <div class="flex items-center justify-between px-4 py-2 bg-indigo-600 text-white">
+                            <div class="flex items-center gap-2">
+                                <svg class="h-3.5 w-3.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                                <span class="text-xs font-bold tracking-wide" x-text="operatorOee.name"></span>
+                            </div>
+                            <span class="text-[10px] opacity-70" x-text="'Today · Machine #' + (operatorOee.machine_id || '—')"></span>
+                        </div>
+                        <div class="grid grid-cols-3 divide-x divide-indigo-100 px-1 py-2">
+                            <div class="px-3 py-1 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-widest text-indigo-400">OEE</p>
+                                <p class="mt-0.5 text-base font-extrabold"
+                                   :class="operatorOee.oee_pct == null ? 'text-gray-300'
+                                         : operatorOee.oee_pct >= 65 ? 'text-green-700'
+                                         : operatorOee.oee_pct >= 45 ? 'text-amber-600' : 'text-red-600'"
+                                   x-text="operatorOee.oee_pct != null ? operatorOee.oee_pct.toFixed(1) + '%' : '—'"></p>
+                            </div>
+                            <div class="px-3 py-1 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-widest text-indigo-400">Avail.</p>
+                                <p class="mt-0.5 text-base font-extrabold text-indigo-700"
+                                   x-text="operatorOee.availability_pct != null ? operatorOee.availability_pct.toFixed(1) + '%' : '—'"></p>
+                            </div>
+                            <div class="px-3 py-1 text-center">
+                                <p class="text-[9px] font-bold uppercase tracking-widest text-indigo-400">Parts</p>
+                                <p class="mt-0.5 text-base font-extrabold text-indigo-700"
+                                   x-text="operatorOee.total_parts != null ? Number(operatorOee.total_parts).toLocaleString() : '—'"></p>
+                            </div>
+                        </div>
+                        <div x-show="operatorOee.shift_name" class="px-4 pb-2 text-[10px] text-indigo-400 text-center"
+                             x-text="operatorOee.shift_name ? 'Shift: ' + operatorOee.shift_name : ''"></div>
+                    </div>
+                </template>
+
+                <template x-if="form.operator_id && operatorOeeLoading">
+                    <div class="flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2 text-xs text-indigo-400">
+                        <svg class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                        Loading operator OEE…
+                    </div>
+                </template>
+
                 {{-- Factory (only when multiple factories exist, create mode only) --}}
                 @if($hasMultiFactory)
                 <template x-if="modalMode === 'create'">
@@ -289,7 +351,7 @@
                 @endif
 
                 {{-- ── Process Flow Panel ──────────────────── --}}
-                <template x-if="selectedPartProcesses.length > 0">
+                <!-- <template x-if="selectedPartProcesses.length > 0">
                     <div class="rounded-xl border border-indigo-100 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
 
                         {{-- Panel header --}}
@@ -392,7 +454,7 @@
                             </div>
                         </div>
                     </div>
-                </template>
+                </template> -->
 
                 {{-- Notes --}}
                 <div>
@@ -981,6 +1043,13 @@
                                                             <span x-text="Number(plan.planned_qty).toLocaleString()"></span> pcs
                                                             &middot; <span x-text="slot.shiftName"></span>
                                                         </p>
+                                                        <p x-show="plan.operator?.name"
+                                                           class="text-[9px] mt-0.5 opacity-50 truncate flex items-center gap-0.5">
+                                                            <svg class="h-2.5 w-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                                            </svg>
+                                                            <span x-text="plan.operator?.name"></span>
+                                                        </p>
                                                         {{-- Good Qty / Attainment bar --}}
                                                         <template x-if="(plan.actual_qty_sum || 0) > 0">
                                                             <div class="mt-1.5">
@@ -1052,7 +1121,7 @@
 
 @push('scripts')
 <script>
-function productionCalendar(apiToken, factoryId, factories, machines, shifts, parts, weekOffDays, holidays) {
+function productionCalendar(apiToken, factoryId, factories, machines, shifts, parts, operators, weekOffDays, holidays) {
     return {
         apiToken,
         currentFactoryId: factoryId,
@@ -1060,9 +1129,14 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         machines:    machines    || [],
         shifts:      shifts      || [],
         parts:       parts       || [],
+        operators:   operators   || [],
         weekOffDays: weekOffDays || [],   // [0..6] — 0=Sunday
         holidays:    holidays    || [],   // [{date:'YYYY-MM-DD', name:'...'}, ...]
         machinePageSize: 15,
+
+        // Operator OEE state
+        operatorOee:        null,
+        operatorOeeLoading: false,
 
         plans:   [],
         loading: false,
@@ -1094,6 +1168,7 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             part_id:         '',
             part_process_id: '',
             shift_id:        '',
+            operator_id:     '',
             planned_date:    '',
             planned_qty:     1,
             status:          'draft',
@@ -1472,12 +1547,14 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.modalMode  = 'create';
             this.editPlan   = null;
             this.formError  = null;
+            this.operatorOee = null;
             this.planAvail  = { checking: false, is_full: null, next_date: null, free_min: null };
             this.form = {
                 machine_id:      machineId || '',
                 part_id:         '',
                 part_process_id: '',
                 shift_id:        shiftId   || '',
+                operator_id:     '',
                 planned_date:    date      || this.todayStr,
                 planned_qty:     1,
                 status:          'draft',
@@ -1491,11 +1568,13 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.modalMode = 'edit';
             this.editPlan  = plan;
             this.formError = null;
+            this.operatorOee = null;
             this.form = {
                 machine_id:      plan.machine_id,
                 part_id:         plan.part_id,
                 part_process_id: plan.part_process_id || '',
                 shift_id:        plan.shift_id,
+                operator_id:     plan.operator_id || '',
                 planned_date:    plan.planned_date ? String(plan.planned_date).substring(0, 10) : '',
                 planned_qty:     plan.planned_qty,
                 status:          plan.status,
@@ -1505,6 +1584,10 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.actualsForm  = { actual_qty: 0, defect_qty: 0, notes: '' };
             this.actualsError = null;
             this.showModal = true;
+            // Load OEE if operator already assigned
+            if (plan.operator_id) {
+                this.$nextTick(() => this.loadOperatorOee());
+            }
         },
 
         // ── Record Actuals ───────────────────────────────────
@@ -1585,6 +1668,49 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
                 };
             } catch {
                 this.planAvail = { checking: false, is_full: null, next_date: null, free_min: null };
+            }
+        },
+
+        // ── Operator OEE ─────────────────────────────────────
+
+        async loadOperatorOee() {
+            const opId = this.form.operator_id;
+            if (!opId) { this.operatorOee = null; return; }
+
+            const op = this.operators.find(o => o.id == opId);
+            if (!op?.machine_id) {
+                // Operator has no machine assigned — show name only
+                this.operatorOee = { name: op?.name || '—', machine_id: null, oee_pct: null, availability_pct: null, total_parts: null, shift_name: null };
+                return;
+            }
+
+            this.operatorOeeLoading = true;
+            this.operatorOee = null;
+            try {
+                const date   = this.form.planned_date || this.todayStr;
+                const params = new URLSearchParams({ date });
+                const res    = await fetch(`/api/v1/iot/machines/${op.machine_id}/oee?${params}`, {
+                    headers: { 'Authorization': `Bearer ${this.apiToken}`, 'Accept': 'application/json' },
+                });
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+
+                // Find best (non-null OEE) shift or first shift
+                const shifts = data.shifts || [];
+                const best   = shifts.find(s => s.oee_pct !== null) || shifts[0] || {};
+
+                this.operatorOee = {
+                    name:             op.name,
+                    machine_id:       op.machine_id,
+                    oee_pct:          best.oee_pct          ?? null,
+                    availability_pct: best.availability_pct ?? null,
+                    total_parts:      best.total_parts       ?? null,
+                    shift_name:       best.shift?.name       ?? null,
+                };
+            } catch {
+                this.operatorOee = { name: op?.name || '—', machine_id: op?.machine_id, oee_pct: null, availability_pct: null, total_parts: null, shift_name: null };
+            } finally {
+                this.operatorOeeLoading = false;
             }
         },
 

@@ -10,6 +10,7 @@ use App\Domain\Production\Models\Part;
 use App\Domain\Production\Models\Shift;
 use App\Http\Controllers\Concerns\ResolvesFactory;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -60,6 +61,13 @@ class ProductionPlanController extends Controller
             }
         }
 
+        // Load operators (users with operator/viewer roles in the factory)
+        $operators = User::withoutGlobalScopes()
+            ->when($factoryId, fn ($q) => $q->where('factory_id', $factoryId))
+            ->whereNotNull('factory_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'machine_id', 'factory_id']);
+
         return view('admin.production.plans.index', [
             'apiToken'    => session('api_token'),
             'factoryId'   => $factoryId,
@@ -67,6 +75,7 @@ class ProductionPlanController extends Controller
             'machines'    => $machines,
             'shifts'      => $shifts,
             'parts'       => $parts,
+            'operators'   => $operators,
             'weekOffDays' => $weekOffDays,
             'holidays'    => $holidays,
         ]);

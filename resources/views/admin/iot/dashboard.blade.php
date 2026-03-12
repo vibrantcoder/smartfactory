@@ -413,116 +413,84 @@
                 </template>
             </div>
 
-            {{-- Row 1: Gauge grid + Live telemetry --}}
+            {{-- Row 1: OEE Shift Breakdown + Live Telemetry --}}
             <div class="grid grid-cols-3 gap-5">
 
-                {{-- Gauge cards (2/3 width) --}}
+                {{-- OEE Per-Shift breakdown (2/3 width) — ISO 22400 --}}
                 <div class="col-span-2 bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
-                    <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-5">OEE Components — <span x-text="oeeDate"></span><span x-show="selectedShiftObj" x-text="' · ' + (selectedShiftObj?.name || '')"></span></h3>
-                    <div class="grid grid-cols-4 gap-3">
-
-                        {{-- OEE Gauge --}}
-                        <div class="flex flex-col items-center">
-                            <div class="gauge-wrap">
-                                <canvas id="detail-gauge-oee"></canvas>
-                                <div class="gauge-label pb-1">
-                                    <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineSelectedOee?.oee_pct)"
-                                         x-text="machineSelectedOee?.oee_pct !== null && machineSelectedOee?.oee_pct !== undefined ? machineSelectedOee.oee_pct + '%' : '—'">
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="mt-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">OEE</p>
-                        </div>
-
-                        {{-- Availability Gauge --}}
-                        <div class="flex flex-col items-center">
-                            <div class="gauge-wrap">
-                                <canvas id="detail-gauge-avail"></canvas>
-                                <div class="gauge-label pb-1">
-                                    <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineSelectedOee?.availability_pct)"
-                                         x-text="machineSelectedOee?.availability_pct !== undefined ? machineSelectedOee.availability_pct + '%' : '—'">
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="mt-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Availability</p>
-                        </div>
-
-                        {{-- Performance Gauge --}}
-                        <div class="flex flex-col items-center">
-                            <div class="gauge-wrap">
-                                <canvas id="detail-gauge-perf"></canvas>
-                                <div class="gauge-label pb-1">
-                                    <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineSelectedOee?.performance_pct)"
-                                         x-text="machineSelectedOee?.performance_pct !== null && machineSelectedOee?.performance_pct !== undefined ? machineSelectedOee.performance_pct + '%' : '—'">
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="mt-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Performance</p>
-                        </div>
-
-                        {{-- Quality Gauge --}}
-                        <div class="flex flex-col items-center">
-                            <div class="gauge-wrap">
-                                <canvas id="detail-gauge-qual"></canvas>
-                                <div class="gauge-label pb-1">
-                                    <div class="text-2xl font-extrabold leading-none"
-                                         :class="gaugeTextClass(machineSelectedOee?.quality_pct)"
-                                         x-text="machineSelectedOee?.quality_pct !== undefined ? machineSelectedOee.quality_pct + '%' : '—'">
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="mt-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Quality</p>
-                        </div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Shift OEE Breakdown</h3>
+                        <span class="rounded-full bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-xs font-medium text-indigo-400">ISO 22400</span>
+                        <span class="text-xs text-slate-600" x-text="oeeDate"></span>
                     </div>
 
-                    {{-- No OEE data notice --}}
-                    <template x-if="machineOeeShifts.length === 0 && !oeeLoading">
-                        <p class="mt-4 text-center text-xs text-slate-500">
-                            No OEE data for <span x-text="oeeDate"></span>. Run a production plan with cycle time to enable OEE.
-                        </p>
-                    </template>
-
-                    {{-- Shift mini-table --}}
-                    <template x-if="machineOeeShifts.length > 1">
-                        <div class="mt-5 border-t border-slate-700/50 pt-4">
-                            <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">All Shifts</p>
-                            <table class="w-full text-xs text-slate-300">
-                                <thead>
-                                    <tr class="text-slate-500 uppercase text-left">
-                                        <th class="pb-1.5 pr-3">Shift</th>
-                                        <th class="pb-1.5 pr-3 text-right">Parts</th>
-                                        <th class="pb-1.5 pr-3 text-center">Avail</th>
-                                        <th class="pb-1.5 pr-3 text-center">Perf</th>
-                                        <th class="pb-1.5 pr-3 text-center">Qual</th>
-                                        <th class="pb-1.5 text-center">OEE</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="s in machineOeeShifts" :key="s.shift_id">
-                                        <tr class="border-t border-slate-700/30">
-                                            <td class="py-1 pr-3 text-slate-300" x-text="s.shift_name"></td>
-                                            <td class="py-1 pr-3 text-right font-mono" x-text="s.total_parts.toLocaleString()"></td>
-                                            <td class="py-1 pr-3 text-center" :class="oeePctClass(s.availability_pct)" x-text="s.availability_pct + '%'"></td>
-                                            <td class="py-1 pr-3 text-center">
-                                                <span x-show="s.performance_pct !== null" :class="oeePctClass(s.performance_pct)" x-text="s.performance_pct + '%'"></span>
-                                                <span x-show="s.performance_pct === null" class="text-slate-600">—</span>
-                                            </td>
-                                            <td class="py-1 pr-3 text-center" :class="oeePctClass(s.quality_pct)" x-text="s.quality_pct + '%'"></td>
-                                            <td class="py-1 text-center">
-                                                <span x-show="s.oee_pct !== null"
-                                                      :class="oeeBadgeDarkClass(s.oee_pct)"
-                                                      x-text="s.oee_pct + '%'"></span>
-                                                <span x-show="s.oee_pct === null" class="text-slate-600">—</span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                    {{-- No data notice --}}
+                    <template x-if="machineOeeShifts.length === 0">
+                        <div class="flex flex-col items-center justify-center py-8 text-slate-600">
+                            <svg class="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p class="text-sm">No OEE data for <span x-text="oeeDate"></span></p>
+                            <p class="text-xs mt-1 text-slate-700">Run a production plan with cycle time to enable OEE.</p>
                         </div>
                     </template>
+
+                    {{-- Shift breakdown table --}}
+                    <template x-if="machineOeeShifts.length > 0">
+                        <table class="w-full text-xs text-slate-300">
+                            <thead>
+                                <tr class="text-slate-500 uppercase text-left border-b border-slate-700/40">
+                                    <th class="pb-2 pr-3">Shift</th>
+                                    <th class="pb-2 pr-3 text-right">Parts</th>
+                                    <th class="pb-2 pr-3 text-right">Rejects</th>
+                                    <th class="pb-2 pr-3 text-center">Avail %</th>
+                                    <th class="pb-2 pr-3 text-center">Perf %</th>
+                                    <th class="pb-2 pr-3 text-center">Qual %</th>
+                                    <th class="pb-2 text-center">OEE %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="s in machineOeeShifts" :key="s.shift_id">
+                                    <tr class="border-t border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                                        <td class="py-2.5 pr-3 text-slate-300 font-medium" x-text="s.shift_name"></td>
+                                        <td class="py-2.5 pr-3 text-right font-mono font-bold text-white" x-text="s.total_parts.toLocaleString()"></td>
+                                        <td class="py-2.5 pr-3 text-right font-mono"
+                                            :class="s.reject_parts > 0 ? 'text-red-400 font-semibold' : 'text-slate-600'"
+                                            x-text="s.reject_parts > 0 ? s.reject_parts : '—'"></td>
+                                        <td class="py-2.5 pr-3 text-center">
+                                            <span class="inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
+                                                  :class="s.availability_pct >= 85 ? 'bg-green-500/20 text-green-400' : s.availability_pct >= 60 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'"
+                                                  x-text="s.availability_pct + '%'"></span>
+                                        </td>
+                                        <td class="py-2.5 pr-3 text-center">
+                                            <span x-show="s.performance_pct !== null"
+                                                  class="inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
+                                                  :class="s.performance_pct >= 85 ? 'bg-green-500/20 text-green-400' : s.performance_pct >= 60 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'"
+                                                  x-text="s.performance_pct + '%'"></span>
+                                            <span x-show="s.performance_pct === null" class="text-slate-700 text-xs">No plan</span>
+                                        </td>
+                                        <td class="py-2.5 pr-3 text-center">
+                                            <span class="inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
+                                                  :class="s.quality_pct >= 85 ? 'bg-green-500/20 text-green-400' : s.quality_pct >= 60 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'"
+                                                  x-text="s.quality_pct + '%'"></span>
+                                        </td>
+                                        <td class="py-2.5 text-center">
+                                            <span x-show="s.oee_pct !== null" :class="oeeBadgeDarkClass(s.oee_pct)" x-text="s.oee_pct + '%'"></span>
+                                            <span x-show="s.oee_pct === null" class="text-slate-600 text-xs">—</span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </template>
+
+                    {{-- ISO 22400 formula reference --}}
+                    <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-600">
+                        <span><span class="text-slate-500 font-semibold">Avail</span> = (Planned − Alarm) ÷ Planned</span>
+                        <span><span class="text-slate-500 font-semibold">Perf</span> = (Parts × Cycle) ÷ Avail Time</span>
+                        <span><span class="text-slate-500 font-semibold">Qual</span> = Good ÷ Total</span>
+                        <span><span class="text-slate-500 font-semibold">OEE</span> = A × P × Q — ISO 22400</span>
+                    </div>
                 </div>
 
                 {{-- Live Telemetry (1/3 width) --}}
@@ -595,10 +563,13 @@
                 </div>
             </div>
 
-            {{-- Row 2: Parts / Hour — full width, large chart --}}
+            {{-- Row 2: Parts / Hour — full width --}}
             <div class="bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Production Rate — Parts / Hour</h3>
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Production Rate — Parts / Hour</h3>
+                        <span class="rounded-full bg-green-500/15 border border-green-500/30 px-2 py-0.5 text-xs font-medium text-green-400">ISO 22400</span>
+                    </div>
                     <div x-show="chartLoading" class="flex items-center gap-1.5 text-xs text-slate-500">
                         <svg class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -607,29 +578,20 @@
                         Loading…
                     </div>
                 </div>
-
-                <template x-if="chartData && chartData.labels.length > 0">
-                    <div style="height: 220px; position: relative;">
-                        <canvas id="detail-parts"></canvas>
-                    </div>
-                </template>
-
-                <template x-if="!chartLoading && chartData && chartData.labels.length === 0">
-                    <div class="flex flex-col items-center justify-center py-12 text-slate-600">
-                        <svg class="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                        <template x-if="selectedShiftId">
-                            <p class="text-sm">No data for <span x-text="selectedShiftObj?.name || 'this shift'"></span> on <span x-text="chartDate"></span>.</p>
-                        </template>
-                        <template x-if="!selectedShiftId">
-                            <p class="text-sm">No production data for <span x-text="chartDate"></span> (All Day).</p>
-                        </template>
-                    </div>
-                </template>
+                {{-- canvas always in DOM; x-show controls visibility --}}
+                <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 220px; position: relative;">
+                    <canvas id="detail-parts"></canvas>
+                </div>
+                <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                     class="flex flex-col items-center justify-center py-12 text-slate-600">
+                    <svg class="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <p class="text-sm" x-text="selectedShiftId ? 'No data for ' + (selectedShiftObj?.name || 'this shift') + ' on ' + chartDate : 'No production data for ' + chartDate"></p>
+                </div>
             </div>
 
-            {{-- Row 2b: Spindle Utilization / Hour — Industry 4.0 key chart --}}
+            {{-- Row 2b: Spindle Utilization / Hour — Industry 4.0 --}}
             <div class="bg-slate-900 rounded-2xl border border-slate-700/50 p-5">
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-3">
@@ -637,26 +599,17 @@
                         <span class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-xs font-medium text-violet-400">Industry 4.0</span>
                     </div>
                     <div class="flex items-center gap-4 text-[11px]">
-                        <span class="flex items-center gap-1.5 text-green-400">
-                            <span class="h-2.5 w-4 rounded inline-block bg-green-500/80"></span>Spindle ON
-                        </span>
-                        <span class="flex items-center gap-1.5 text-yellow-400">
-                            <span class="h-2.5 w-4 rounded inline-block bg-yellow-400/75"></span>Idle
-                        </span>
-                        <span class="flex items-center gap-1.5 text-red-400">
-                            <span class="h-2.5 w-4 rounded inline-block bg-red-500/80"></span>Alarm
-                        </span>
+                        <span class="flex items-center gap-1.5 text-green-400"><span class="h-2.5 w-4 rounded inline-block bg-green-500/80"></span>Spindle ON</span>
+                        <span class="flex items-center gap-1.5 text-yellow-400"><span class="h-2.5 w-4 rounded inline-block bg-yellow-400/75"></span>Idle</span>
+                        <span class="flex items-center gap-1.5 text-red-400"><span class="h-2.5 w-4 rounded inline-block bg-red-500/80"></span>Alarm</span>
                     </div>
                 </div>
-                <p class="text-xs text-slate-600 mb-4">Each bar = 1 hour. Shows how much of each hour the spindle was cutting vs idle vs in alarm.</p>
-                <template x-if="chartData && chartData.labels.length > 0">
-                    <div style="height: 200px; position: relative;">
-                        <canvas id="detail-spindle"></canvas>
-                    </div>
-                </template>
-                <template x-if="!chartLoading && chartData && chartData.labels.length === 0">
-                    <div class="flex items-center justify-center h-32 text-slate-600 text-sm">No data for this period</div>
-                </template>
+                <p class="text-xs text-slate-600 mb-4">Each bar = 1 hour. Cutting vs idle vs alarm time fraction per hour.</p>
+                <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 200px; position: relative;">
+                    <canvas id="detail-spindle"></canvas>
+                </div>
+                <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                     class="flex items-center justify-center h-32 text-slate-600 text-sm">No data for this period</div>
             </div>
 
             {{-- Row 3: Rejects + Alarms (side by side) --}}
@@ -667,17 +620,13 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Rejects / Hour</h3>
                         <span class="text-xs text-slate-500 tabular-nums"
-                              x-text="'Total: ' + machinePartsTotals.rejects + ' (' + machinePartsTotals.defect_rate + '%)'">
-                        </span>
+                              x-text="'Total: ' + machinePartsTotals.rejects + ' (' + machinePartsTotals.defect_rate + '%)'"></span>
                     </div>
-                    <template x-if="chartData && chartData.labels.length > 0">
-                        <div style="height: 160px; position: relative;">
-                            <canvas id="detail-rejects"></canvas>
-                        </div>
-                    </template>
-                    <template x-if="!chartLoading && chartData && chartData.labels.length === 0">
-                        <div class="flex items-center justify-center h-32 text-slate-600 text-sm">No data</div>
-                    </template>
+                    <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 160px; position: relative;">
+                        <canvas id="detail-rejects"></canvas>
+                    </div>
+                    <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                         class="flex items-center justify-center h-32 text-slate-600 text-sm">No data</div>
                 </div>
 
                 {{-- Alarm Events / Hour --}}
@@ -685,17 +634,13 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xs font-semibold uppercase tracking-widest text-slate-400">Alarm Events / Hour</h3>
                         <span class="text-xs text-slate-500 tabular-nums"
-                              x-text="'Total: ' + machinePartsTotals.alarm_events">
-                        </span>
+                              x-text="'Total: ' + machinePartsTotals.alarm_events"></span>
                     </div>
-                    <template x-if="chartData && chartData.labels.length > 0">
-                        <div style="height: 160px; position: relative;">
-                            <canvas id="detail-alarms"></canvas>
-                        </div>
-                    </template>
-                    <template x-if="!chartLoading && chartData && chartData.labels.length === 0">
-                        <div class="flex items-center justify-center h-32 text-slate-600 text-sm">No data</div>
-                    </template>
+                    <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 160px; position: relative;">
+                        <canvas id="detail-alarms"></canvas>
+                    </div>
+                    <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                         class="flex items-center justify-center h-32 text-slate-600 text-sm">No data</div>
                 </div>
             </div>
 
@@ -996,34 +941,30 @@
         </div>
 
         <div class="p-5">
-            <template x-if="trendData.length > 0">
-                <div style="height: 240px; position: relative;">
-                    <canvas id="trend-chart"></canvas>
-                </div>
-            </template>
-            <template x-if="!trendLoading && trendData.length === 0">
-                <div class="flex items-center justify-center h-40 text-gray-400 text-sm">
-                    No historical OEE data yet. Run <code class="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">php artisan iot:aggregate-oee</code> to populate.
-                </div>
-            </template>
+            <div x-show="trendData.length > 0" style="height: 240px; position: relative;">
+                <canvas id="trend-chart"></canvas>
+            </div>
+            <div x-show="!trendLoading && trendData.length === 0"
+                 class="flex items-center justify-center h-40 text-gray-400 text-sm">
+                No historical OEE data yet. Run <code class="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">php artisan iot:aggregate-oee</code> to populate.
+            </div>
 
             {{-- Legend --}}
-            <template x-if="trendData.length > 0">
-                <div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-                    <span class="flex items-center gap-1.5">
-                        <span class="inline-block h-2.5 w-5 rounded bg-indigo-500"></span>OEE%
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="inline-block h-2.5 w-5 rounded bg-green-500"></span>Availability%
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="inline-block h-2.5 w-5 rounded bg-amber-500"></span>Performance%
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="inline-block h-2.5 w-5 rounded bg-blue-400"></span>Quality%
-                    </span>
-                </div>
-            </template>
+            <div x-show="trendData.length > 0"
+                 class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-2.5 w-5 rounded bg-indigo-500"></span>OEE%
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-2.5 w-5 rounded bg-green-500"></span>Availability%
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-2.5 w-5 rounded bg-amber-500"></span>Performance%
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block h-2.5 w-5 rounded bg-blue-400"></span>Quality%
+                </span>
+            </div>
         </div>
     </div>{{-- end Trend section --}}
 
@@ -1237,10 +1178,9 @@ function iotDashboard(apiToken, factoryId, factories) {
                 const json   = await res.json();
                 this.oeeData = json.machines || [];
 
-                // Re-render gauges if machine detail is open
+                // Re-render charts if machine detail is open
                 if (this.detailOpen) {
-                    await this.$nextTick();
-                    this.renderGauges();
+                    setTimeout(() => this.renderCharts(), 80);
                 }
             } catch { /* silent */ } finally {
                 this.oeeLoading = false;
@@ -1259,8 +1199,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 if (!res.ok) return;
                 const json    = await res.json();
                 this.trendData = json.trend || [];
-                await this.$nextTick();
-                this.renderTrendChart();
+                setTimeout(() => this.renderTrendChart(), 80);
             } catch { /* silent */ } finally {
                 this.trendLoading = false;
             }
@@ -1336,9 +1275,8 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this.chartLoading = false;
             }
 
-            await this.$nextTick();
-            this.renderCharts();
-            this.renderGauges();
+            // Use setTimeout so Alpine finishes x-show DOM toggles before Chart.js queries canvas IDs
+            setTimeout(() => this.renderCharts(), 80);
             this.loadTimeline(machineId); // fire-and-forget; independent of chart render
         },
 

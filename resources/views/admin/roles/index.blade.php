@@ -158,144 +158,138 @@
         </div>
     </template>
 
-    {{-- ── Permission Drawer ────────────────────────────────── --}}
+    {{-- ── Permission Modal ────────────────────────────────── --}}
+    <template x-if="drawer.open">
+        <div class="fixed inset-0 z-40 flex items-center justify-center p-4">
+            {{-- Backdrop --}}
+            <div class="absolute inset-0 bg-black/40" @click="drawer.open = false"></div>
 
-    {{-- Backdrop --}}
-    <div
-        x-show="drawer.open"
-        x-transition:enter="transition-opacity ease-out duration-200"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition-opacity ease-in duration-150"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        class="fixed inset-0 z-30 bg-black/30"
-        @click="drawer.open = false"
-    ></div>
+            {{-- Modal panel --}}
+            <div class="relative z-50 flex w-full max-w-4xl flex-col rounded-xl bg-white shadow-xl"
+                 style="max-height: 90vh"
+                 @click.stop>
 
-    {{-- Panel --}}
-    <div
-        x-show="drawer.open"
-        x-transition:enter="transition ease-out duration-250 transform"
-        x-transition:enter-start="translate-x-full"
-        x-transition:enter-end="translate-x-0"
-        x-transition:leave="transition ease-in duration-200 transform"
-        x-transition:leave-start="translate-x-0"
-        x-transition:leave-end="translate-x-full"
-        class="fixed inset-y-0 right-0 z-40 flex w-full max-w-2xl flex-col bg-white shadow-2xl"
-        @click.stop
-    >
-        {{-- Drawer header --}}
-        <div class="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-4">
-            <div>
-                <h3 class="text-base font-semibold text-gray-900">
-                    Permissions —
-                    <span x-text="drawer.role?.label ?? ''"></span>
-                </h3>
-                <p class="mt-0.5 font-mono text-xs text-gray-400" x-text="drawer.role?.name ?? ''"></p>
-            </div>
-            <button @click="drawer.open = false"
-                    class="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        </div>
-
-        {{-- Super-admin notice --}}
-        <div x-show="drawer.role?.name === 'super-admin'"
-             class="shrink-0 border-b border-purple-100 bg-purple-50 px-6 py-3 text-xs text-purple-700">
-            Super Admin permissions are managed via Gate bypass — explicit assignments are not used.
-        </div>
-
-        {{-- Flash --}}
-        <div x-show="drawer.flash.message"
-             x-transition
-             class="shrink-0 px-6 py-2 text-xs font-medium"
-             :class="drawer.flash.type === 'success'
-                ? 'bg-green-50 text-green-800 border-b border-green-200'
-                : 'bg-red-50 text-red-800 border-b border-red-200'"
-             x-text="drawer.flash.message">
-        </div>
-
-        {{-- Loading state --}}
-        <div x-show="drawer.loading"
-             class="flex flex-1 items-center justify-center text-sm text-gray-400">
-            Loading permissions…
-        </div>
-
-        {{-- Matrix body (scrollable) --}}
-        <div x-show="!drawer.loading" class="flex-1 overflow-y-auto">
-
-            {{-- Bulk controls (only for non-super-admin) --}}
-            <div x-show="drawer.role?.name !== 'super-admin'"
-                 class="sticky top-0 z-10 flex items-center gap-4 border-b border-gray-100 bg-white px-6 py-2">
-                <span class="text-xs text-gray-500">
-                    <span x-text="totalAssigned()"></span> of
-                    <span x-text="drawer.matrix.reduce((s,g) => s + g.permissions.length, 0)"></span>
-                    assigned
-                </span>
-                <button @click="selectAll()"
-                        class="text-xs text-indigo-600 hover:underline">Select all</button>
-                <button @click="deselectAll()"
-                        class="text-xs text-red-500 hover:underline">Deselect all</button>
-            </div>
-
-            <div class="px-6 py-4 space-y-6">
-                <template x-for="group in drawer.matrix" :key="group.group_key">
+                {{-- Header --}}
+                <div class="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-4">
                     <div>
-                        {{-- Group header --}}
-                        <div class="mb-2 flex items-center justify-between">
-                            <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500"
-                                x-text="group.group_label"></h4>
-                            <div x-show="drawer.role?.name !== 'super-admin'" class="flex gap-2">
-                                <button @click="toggleGroup(group, true)"
-                                        class="text-xs text-indigo-500 hover:underline">All</button>
-                                <span class="text-gray-300">|</span>
-                                <button @click="toggleGroup(group, false)"
-                                        class="text-xs text-red-400 hover:underline">None</button>
-                            </div>
-                        </div>
-                        {{-- Checkboxes --}}
-                        <div class="flex flex-wrap gap-2">
-                            <template x-for="perm in group.permissions" :key="perm.name">
-                                <label
-                                    class="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1"
-                                    :class="perm.assigned ? 'bg-indigo-50 text-indigo-800' : 'bg-gray-100 text-gray-600'"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        x-model="perm.assigned"
-                                        @change="markDirty()"
-                                        :disabled="drawer.role?.name === 'super-admin'"
-                                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-40"
-                                    >
-                                    <span x-text="perm.label" class="select-none text-xs"></span>
-                                </label>
-                            </template>
-                        </div>
+                        <h3 class="text-base font-semibold text-gray-900">
+                            Edit Permissions —
+                            <span x-text="drawer.role?.label ?? ''"></span>
+                        </h3>
+                        <p class="mt-0.5 font-mono text-xs text-gray-400" x-text="drawer.role?.name ?? ''"></p>
                     </div>
-                </template>
+                    <button @click="drawer.open = false"
+                            class="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                {{-- Super-admin notice --}}
+                <div x-show="drawer.role?.name === 'super-admin'"
+                     class="shrink-0 border-b border-purple-100 bg-purple-50 px-6 py-3 text-xs text-purple-700">
+                    Super Admin permissions are managed via Gate bypass — explicit assignments are not used.
+                </div>
+
+                {{-- Flash --}}
+                <div x-show="drawer.flash.message"
+                     x-transition
+                     class="shrink-0 px-6 py-2 text-xs font-medium"
+                     :class="drawer.flash.type === 'success'
+                        ? 'bg-green-50 text-green-800 border-b border-green-200'
+                        : 'bg-red-50 text-red-800 border-b border-red-200'"
+                     x-text="drawer.flash.message">
+                </div>
+
+                {{-- Loading state --}}
+                <div x-show="drawer.loading"
+                     class="flex flex-1 items-center justify-center py-16 text-sm text-gray-400">
+                    Loading permissions…
+                </div>
+
+                {{-- Matrix body (scrollable) --}}
+                <div x-show="!drawer.loading" class="flex-1 overflow-y-auto">
+
+                    {{-- Bulk controls --}}
+                    <div x-show="drawer.role?.name !== 'super-admin'"
+                         class="sticky top-0 z-10 flex items-center gap-4 border-b border-gray-100 bg-white px-6 py-2">
+                        <span class="text-xs text-gray-500">
+                            <span x-text="totalAssigned()"></span> of
+                            <span x-text="drawer.matrix.reduce((s,g) => s + g.permissions.length, 0)"></span>
+                            assigned
+                        </span>
+                        <button @click="selectAll()"
+                                class="text-xs text-indigo-600 hover:underline">Select all</button>
+                        <button @click="deselectAll()"
+                                class="text-xs text-red-500 hover:underline">Deselect all</button>
+                    </div>
+
+                    <div class="px-6 py-4 space-y-6">
+                        <template x-for="group in drawer.matrix" :key="group.group_key">
+                            <div>
+                                <div class="mb-2 flex items-center justify-between">
+                                    <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                        x-text="group.group_label"></h4>
+                                    <div x-show="drawer.role?.name !== 'super-admin'" class="flex gap-2">
+                                        <button @click="toggleGroup(group, true)"
+                                                class="text-xs text-indigo-500 hover:underline">All</button>
+                                        <span class="text-gray-300">|</span>
+                                        <button @click="toggleGroup(group, false)"
+                                                class="text-xs text-red-400 hover:underline">None</button>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="perm in group.permissions" :key="perm.name">
+                                        <label
+                                            class="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1"
+                                            :class="perm.assigned ? 'bg-indigo-50 text-indigo-800' : 'bg-gray-100 text-gray-600'"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                x-model="perm.assigned"
+                                                @change="markDirty()"
+                                                :disabled="drawer.role?.name === 'super-admin'"
+                                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-40"
+                                            >
+                                            <span x-text="perm.label" class="select-none text-xs"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- Footer --}}
+                <div class="shrink-0 border-t border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-between rounded-b-xl">
+                    <div>
+                        <span x-show="drawer.dirty"
+                              class="text-xs font-medium text-amber-600">Unsaved changes</span>
+                        <span x-show="!drawer.dirty && drawer.role?.name !== 'super-admin'"
+                              class="text-xs text-gray-400">No changes</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button @click="drawer.open = false"
+                                class="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">
+                            Close
+                        </button>
+                        <button
+                            x-show="drawer.role?.name !== 'super-admin'"
+                            @click="savePermissions"
+                            :disabled="!drawer.dirty || drawer.saving"
+                            :class="drawer.dirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'"
+                            class="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-60"
+                        >
+                            <span x-show="!drawer.saving">Save Permissions</span>
+                            <span x-show="drawer.saving">Saving…</span>
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
-
-        {{-- Drawer footer --}}
-        <div x-show="drawer.role?.name !== 'super-admin'"
-             class="shrink-0 border-t border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-between">
-            <span x-show="drawer.dirty"
-                  class="text-xs font-medium text-amber-600">Unsaved changes</span>
-            <span x-show="!drawer.dirty" class="text-xs text-gray-400">No changes</span>
-            <button
-                @click="savePermissions"
-                :disabled="!drawer.dirty || drawer.saving"
-                :class="drawer.dirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'"
-                class="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-60"
-            >
-                <span x-show="!drawer.saving">Save Permissions</span>
-                <span x-show="drawer.saving">Saving…</span>
-            </button>
-        </div>
-    </div>
+    </template>
 
 </div>
 @endsection

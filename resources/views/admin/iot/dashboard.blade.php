@@ -1432,7 +1432,7 @@ function iotDashboard(apiToken, factoryId, factories) {
 
                 // Re-render charts if machine detail is open
                 if (this.detailOpen) {
-                    setTimeout(() => this.renderCharts(), 80);
+                    this.$nextTick(() => requestAnimationFrame(() => this.renderCharts()));
                 }
             } catch { /* silent */ } finally {
                 this.oeeLoading = false;
@@ -1527,8 +1527,9 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this.chartLoading = false;
             }
 
-            // Use setTimeout so Alpine finishes x-show DOM toggles before Chart.js queries canvas IDs
-            setTimeout(() => this.renderCharts(), 80);
+            // Wait for Alpine to flush x-show changes, then wait one animation frame
+            // so the browser has painted and canvases have real dimensions before Chart.js runs.
+            this.$nextTick(() => requestAnimationFrame(() => this.renderCharts()));
             this.loadTimeline(machineId); // fire-and-forget; independent of chart render
         },
 
@@ -1660,13 +1661,25 @@ function iotDashboard(apiToken, factoryId, factories) {
 
         renderCharts() {
             ['parts', 'rejects', 'alarms', 'spindle'].forEach(k => {
-                this._charts[k]?.destroy();
+                try { this._charts[k]?.destroy(); } catch (_) {}
                 this._charts[k] = null;
             });
 
             if (!this.chartData || !Array.isArray(this.chartData.labels) || this.chartData.labels.length === 0) return;
 
             const labels = this.chartData.labels;
+
+            // Helper: get canvas only if it's a real HTMLCanvasElement in the DOM.
+            // Chart.js throws if given null or a non-canvas element.
+            // Also destroys any orphaned Chart.js instance still attached to the canvas.
+            const getCanvas = id => {
+                const el = document.getElementById(id);
+                if (!(el instanceof HTMLCanvasElement)) return null;
+                // Destroy any orphaned chart instance Chart.js tracks internally
+                const existing = Chart.getChart(el);
+                if (existing) { try { existing.destroy(); } catch (_) {} }
+                return el;
+            };
 
             const darkOpts = {
                 responsive: true,
@@ -1685,64 +1698,70 @@ function iotDashboard(apiToken, factoryId, factories) {
                 },
             };
 
-            const partsCtx = document.getElementById('detail-parts');
+            const partsCtx = getCanvas('detail-parts');
             if (partsCtx) {
-                this._charts.parts = new Chart(partsCtx, {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Parts/Hour',
-                            data: this.chartData.parts_per_hour,
-                            borderColor: '#22c55e',
-                            backgroundColor: 'rgba(34,197,94,0.12)',
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#22c55e',
-                            borderWidth: 2,
-                        }],
-                    },
-                    options: darkOpts,
-                });
+                try {
+                    this._charts.parts = new Chart(partsCtx, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label: 'Parts/Hour',
+                                data: this.chartData.parts_per_hour,
+                                borderColor: '#22c55e',
+                                backgroundColor: 'rgba(34,197,94,0.12)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 3,
+                                pointBackgroundColor: '#22c55e',
+                                borderWidth: 2,
+                            }],
+                        },
+                        options: darkOpts,
+                    });
+                } catch (e) { console.warn('parts chart:', e.message); }
             }
 
-            const rejectsCtx = document.getElementById('detail-rejects');
+            const rejectsCtx = getCanvas('detail-rejects');
             if (rejectsCtx) {
-                this._charts.rejects = new Chart(rejectsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Rejects/Hour',
-                            data: this.chartData.rejects_per_hour,
-                            backgroundColor: 'rgba(239,68,68,0.75)',
-                            borderRadius: 3,
-                        }],
-                    },
-                    options: darkOpts,
-                });
+                try {
+                    this._charts.rejects = new Chart(rejectsCtx, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label: 'Rejects/Hour',
+                                data: this.chartData.rejects_per_hour,
+                                backgroundColor: 'rgba(239,68,68,0.75)',
+                                borderRadius: 3,
+                            }],
+                        },
+                        options: darkOpts,
+                    });
+                } catch (e) { console.warn('rejects chart:', e.message); }
             }
 
-            const alarmsCtx = document.getElementById('detail-alarms');
+            const alarmsCtx = getCanvas('detail-alarms');
             if (alarmsCtx) {
-                this._charts.alarms = new Chart(alarmsCtx, {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Alarms/Hour',
-                            data: this.chartData.alarms_per_hour,
-                            backgroundColor: 'rgba(251,146,60,0.75)',
-                            borderRadius: 3,
-                        }],
-                    },
-                    options: darkOpts,
-                });
+                try {
+                    this._charts.alarms = new Chart(alarmsCtx, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label: 'Alarms/Hour',
+                                data: this.chartData.alarms_per_hour,
+                                backgroundColor: 'rgba(251,146,60,0.75)',
+                                borderRadius: 3,
+                            }],
+                        },
+                        options: darkOpts,
+                    });
+                } catch (e) { console.warn('alarms chart:', e.message); }
             }
 
             // ── Spindle Utilization / Hour — stacked 100% bar ────────
-            const spindleCtx = document.getElementById('detail-spindle');
+            const spindleCtx = getCanvas('detail-spindle');
             if (spindleCtx && this.chartData.spindle_util_per_hour) {
                 const spindleOpts = {
                     responsive: true,
@@ -1771,37 +1790,39 @@ function iotDashboard(apiToken, factoryId, factories) {
                         },
                     },
                 };
-                this._charts.spindle = new Chart(spindleCtx, {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [
-                            {
-                                label: 'Spindle ON',
-                                data: this.chartData.spindle_util_per_hour,
-                                backgroundColor: 'rgba(34,197,94,0.82)',
-                                stack: 'state',
-                                borderRadius: { topLeft: 3, topRight: 3 },
-                                borderSkipped: false,
-                            },
-                            {
-                                label: 'Idle',
-                                data: this.chartData.idle_pct_per_hour,
-                                backgroundColor: 'rgba(234,179,8,0.70)',
-                                stack: 'state',
-                                borderSkipped: false,
-                            },
-                            {
-                                label: 'Alarm',
-                                data: this.chartData.alarm_pct_per_hour,
-                                backgroundColor: 'rgba(239,68,68,0.80)',
-                                stack: 'state',
-                                borderSkipped: false,
-                            },
-                        ],
-                    },
-                    options: spindleOpts,
-                });
+                try {
+                    this._charts.spindle = new Chart(spindleCtx, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: 'Spindle ON',
+                                    data: this.chartData.spindle_util_per_hour,
+                                    backgroundColor: 'rgba(34,197,94,0.82)',
+                                    stack: 'state',
+                                    borderRadius: { topLeft: 3, topRight: 3 },
+                                    borderSkipped: false,
+                                },
+                                {
+                                    label: 'Idle',
+                                    data: this.chartData.idle_pct_per_hour,
+                                    backgroundColor: 'rgba(234,179,8,0.70)',
+                                    stack: 'state',
+                                    borderSkipped: false,
+                                },
+                                {
+                                    label: 'Alarm',
+                                    data: this.chartData.alarm_pct_per_hour,
+                                    backgroundColor: 'rgba(239,68,68,0.80)',
+                                    stack: 'state',
+                                    borderSkipped: false,
+                                },
+                            ],
+                        },
+                        options: spindleOpts,
+                    });
+                } catch (e) { console.warn('spindle chart:', e.message); }
             }
         },
 

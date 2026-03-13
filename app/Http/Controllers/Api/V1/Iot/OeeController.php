@@ -230,8 +230,9 @@ class OeeController extends Controller
             'machines'   => $result,
         ];
 
-        // Cache for 5 minutes (only today's data — historical dates cached longer)
-        $ttl = $date->isToday() ? 300 : 3600;
+        // Today: cache 60 s (live-calculated, refreshes every minute in dashboard)
+        // Past dates: cache 1 hour (stored summary, never changes)
+        $ttl = $date->isToday() ? 60 : 3600;
         if (!$useLive) {
             Cache::put($cacheKey, $payload, $ttl);
         }
@@ -368,11 +369,16 @@ class OeeController extends Controller
         Carbon $date,
         ?ProductionPlan $plan
     ): array {
-        if ($row !== null) {
+        // Past dates: use the stored summary row (it was finalised after shift end).
+        // Today (current shift): always recalculate live from iot_logs so the
+        // dashboard shows real-time OEE without needing the background scheduler.
+        // Also fall through to live if the stored row has log_count=0
+        // (scheduler never ran, or shift hasn't produced any logs yet).
+        if ($row !== null && $row->log_count > 0 && !$date->isToday()) {
             return array_merge($this->rowToOeeArray($row), ['_source' => 'cache']);
         }
 
-        // Fallback: live calculation
+        // Live calculation from iot_logs
         $oee = $this->oeeService->calculateForShift(
             $machine, $shift, $date,
             $plan?->planned_qty,

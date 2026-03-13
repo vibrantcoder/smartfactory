@@ -77,18 +77,17 @@ class PurgeIotLogsCommand extends Command
             return self::SUCCESS;
         }
 
-        // ── Phase 1: Re-aggregate every date being purged ───────────────────
+        // ── Phase 1: Re-aggregate ALL dates that have iot_logs ──────────────
         //
-        // Find all unique dates in the rows we are about to delete and
-        // run OEE aggregation for each one so machine_oee_shifts is complete
+        // Aggregates every date present in iot_logs — both dates being purged
+        // AND dates being kept — so machine_oee_shifts is fully up-to-date
         // before any raw data disappears.
         //
         if (! $skipAgg) {
-            $this->info('Phase 1: Re-aggregating OEE for dates being purged...');
+            $this->info('Phase 1: Re-aggregating OEE for all dates with iot_logs...');
 
             $dates = DB::table('iot_logs')
                 ->select(DB::raw("DATE(logged_at) as d"))
-                ->where('logged_at', '<', $cutoff)
                 ->groupBy('d')
                 ->orderBy('d')
                 ->pluck('d');

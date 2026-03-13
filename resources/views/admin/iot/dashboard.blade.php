@@ -3,7 +3,7 @@
 @section('title', 'IoT Dashboard')
 
 @push('head')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
     @keyframes pulse-ring {
         0%   { transform: scale(0.85); opacity: 1; }
@@ -1460,6 +1460,12 @@ function iotDashboard(apiToken, factoryId, factories) {
             if (!(canvas instanceof HTMLCanvasElement) || !this.trendData.length) return;
             if (canvas.offsetWidth === 0 && canvas.offsetHeight === 0) return;
             if (this._trendChart) { try { this._trendChart.destroy(); } catch (_) {} this._trendChart = null; }
+            // Set intrinsic canvas dimensions to fill container (responsive:false requires this)
+            const parent = canvas.parentElement;
+            if (parent) {
+                canvas.width  = parent.clientWidth  || parent.offsetWidth  || 600;
+                canvas.height = parent.clientHeight || parent.offsetHeight || 240;
+            }
             const labels = this.trendData.map(r => {
                 const d = new Date(r.oee_date);
                 return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
@@ -1477,7 +1483,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                         ],
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
+                        responsive: false, maintainAspectRatio: false,
                         plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
                         scales: {
                             y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
@@ -1677,17 +1683,24 @@ function iotDashboard(apiToken, factoryId, factories) {
             const getCanvas = id => {
                 const el = document.getElementById(id);
                 if (!(el instanceof HTMLCanvasElement)) return null;
-                // Skip if inside a display:none ancestor (offsetParent is null for hidden elements,
-                // except position:fixed — check offsetWidth as fallback)
+                // Skip if inside a display:none ancestor
                 if (el.offsetWidth === 0 && el.offsetHeight === 0) return null;
                 // Destroy any orphaned chart instance Chart.js tracks internally
                 const existing = Chart.getChart(el);
                 if (existing) { try { existing.destroy(); } catch (_) {} }
+                // Explicitly size canvas to fill its container.
+                // We use responsive:false to avoid Chart.js ResizeObserver which can
+                // fire on a null canvas after destroy() and throw uncaught errors.
+                const parent = el.parentElement;
+                if (parent) {
+                    el.width  = parent.clientWidth  || parent.offsetWidth  || 400;
+                    el.height = parent.clientHeight || parent.offsetHeight || 200;
+                }
                 return el;
             };
 
             const darkOpts = {
-                responsive: true,
+                responsive: false,
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
@@ -1769,7 +1782,7 @@ function iotDashboard(apiToken, factoryId, factories) {
             const spindleCtx = getCanvas('detail-spindle');
             if (spindleCtx && this.chartData.spindle_util_per_hour) {
                 const spindleOpts = {
-                    responsive: true,
+                    responsive: false,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
@@ -1850,6 +1863,8 @@ function iotDashboard(apiToken, factoryId, factories) {
                 const ctx = document.getElementById(spec.id);
                 if (!(ctx instanceof HTMLCanvasElement)) return;
                 if (ctx.offsetWidth === 0 && ctx.offsetHeight === 0) return;
+                const gParent = ctx.parentElement;
+                if (gParent) { ctx.width = gParent.clientWidth || 120; ctx.height = gParent.clientHeight || 100; }
 
                 const val = spec.val;
                 const hasVal = val !== null && val !== undefined;
@@ -1875,7 +1890,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                             circumference: 180,
                             rotation: 270,
                             cutout: '72%',
-                            responsive: true,
+                            responsive: false,
                             maintainAspectRatio: false,
                             plugins: {
                                 legend: { display: false },

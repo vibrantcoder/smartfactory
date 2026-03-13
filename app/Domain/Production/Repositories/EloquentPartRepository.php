@@ -140,6 +140,7 @@ class EloquentPartRepository implements PartRepositoryInterface
                     'machine_type_required' => $step['machine_type_required'] ?? null,
                     'standard_cycle_time'   => $step['standard_cycle_time']   ?? null,
                     'setup_time'            => $step['setup_time']            ?? null,
+                    'load_unload_time'      => $step['load_unload_time']      ?? null,
                     'process_type'          => $step['process_type']          ?? 'inhouse',
                     'notes'                 => $step['notes']                 ?? null,
                 ]);

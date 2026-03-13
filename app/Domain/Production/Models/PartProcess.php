@@ -40,6 +40,7 @@ class PartProcess extends BaseModel
         'machine_type_required',
         'standard_cycle_time',
         'setup_time',
+        'load_unload_time',
         'process_type',
         'notes',
     ];
@@ -51,6 +52,7 @@ class PartProcess extends BaseModel
             'sequence_order'      => 'integer',
             'standard_cycle_time' => 'decimal:2',
             'setup_time'          => 'decimal:2',
+            'load_unload_time'    => 'decimal:2',
         ];
     }
 

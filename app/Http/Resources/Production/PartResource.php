@@ -54,6 +54,9 @@ class PartResource extends JsonResource
                     'setup_time'            => $process->setup_time
                         ? (float) $process->setup_time
                         : null,
+                    'load_unload_time'      => $process->load_unload_time
+                        ? (float) $process->load_unload_time
+                        : null,
                     'process_type'          => $process->process_type ?? 'inhouse',
                     'effective_cycle_time'  => $process->effectiveCycleTime(),
                     'notes'                 => $process->notes,

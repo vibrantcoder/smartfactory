@@ -33,6 +33,7 @@ class SyncPartProcessesRequest extends FormRequest
             'processes.*.machine_type_required'  => ['nullable', 'string', 'max:50'],
             'processes.*.standard_cycle_time'    => ['nullable', 'numeric', 'min:0', 'max:99999.99'],
             'processes.*.setup_time'             => ['nullable', 'numeric', 'min:0', 'max:99999.99'],
+            'processes.*.load_unload_time'       => ['nullable', 'numeric', 'min:0', 'max:99999.99'],
             'processes.*.process_type'           => ['nullable', 'string', 'in:inhouse,outside'],
             'processes.*.notes'                  => ['nullable', 'string', 'max:500'],
         ];

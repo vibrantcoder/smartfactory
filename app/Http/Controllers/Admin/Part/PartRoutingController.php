@@ -71,6 +71,7 @@ class PartRoutingController extends Controller
             'default_cycle_time'   => null,
             'standard_cycle_time'  => $p->standard_cycle_time ? (float) $p->standard_cycle_time : null,
             'setup_time'           => $p->setup_time ? (float) $p->setup_time : null,
+            'load_unload_time'     => $p->load_unload_time ? (float) $p->load_unload_time : null,
             'process_type'         => $p->process_type ?? 'inhouse',
             'machine_type_required'=> $p->machine_type_required,
             'notes'                => $p->notes,

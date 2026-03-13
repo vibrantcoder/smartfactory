@@ -310,7 +310,7 @@
                                 </div>
                             </div>
 
-                            {{-- Setup time + Process type row --}}
+                            {{-- Setup time + Load/Unload + Process type row --}}
                             <div class="mt-2 flex items-center gap-4 flex-wrap">
 
                                 {{-- Setup time (MM:SS) --}}
@@ -325,6 +325,28 @@
                                         class="w-20 rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
                                     >
                                 </div>
+
+                                {{-- Load/Unload time (MM:SS) --}}
+                                <div class="flex items-center gap-1.5">
+                                    <label class="text-xs text-gray-500" :for="`loadunload-${index}`">Load/Unload (MM:SS):</label>
+                                    <input
+                                        :id="`loadunload-${index}`"
+                                        :value="step.loadUnloadTime !== '' && step.loadUnloadTime != null ? toMMSS(step.loadUnloadTime) : ''"
+                                        @change="step.loadUnloadTime = parseMMSS($event.target.value); $event.target.value = step.loadUnloadTime !== '' ? toMMSS(step.loadUnloadTime) : ''"
+                                        type="text"
+                                        placeholder="MM:SS"
+                                        class="w-20 rounded border border-gray-200 px-2 py-1 text-xs font-mono focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                                    >
+                                </div>
+
+                                {{-- Combined time per part badge --}}
+                                <template x-if="(effectiveCycleTime(step) > 0 || (parseFloat(step.loadUnloadTime) > 0))">
+                                    <div class="text-xs font-medium">
+                                        <span class="text-gray-400">Per part:</span>
+                                        <span class="ml-1 font-mono text-indigo-600"
+                                              x-text="toMMSS(effectiveCycleTime(step) + (parseFloat(step.loadUnloadTime) || 0))"></span>
+                                    </div>
+                                </template>
 
                                 {{-- Process type toggle --}}
                                 <div class="flex items-center gap-1.5">
@@ -390,7 +412,7 @@
                     </div>
 
                     {{-- Production formula --}}
-                    <template x-if="totalCycleTime > 0">
+                    <template x-if="totalCycleTime > 0 || totalLoadUnloadTime > 0">
                         <div class="rounded-lg bg-gray-50 border border-gray-100 px-4 py-2 text-xs text-gray-600">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="font-medium text-gray-700">Production formula:</span>
@@ -401,9 +423,15 @@
                                 </span>
                                 <span class="text-gray-400">+</span>
 
-                                {{-- Qty × cycle --}}
+                                {{-- Qty × (load/unload + cycle) --}}
                                 <span class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 font-mono">
-                                    Qty × <span x-text="toMMSS(totalCycleTime)"></span>
+                                    Qty ×
+                                    <template x-if="totalLoadUnloadTime > 0">
+                                        <span>(<span x-text="toMMSS(totalLoadUnloadTime)"></span> L/U + <span x-text="toMMSS(totalCycleTime)"></span> cycle = <span x-text="toMMSS(timePerPart)"></span>)</span>
+                                    </template>
+                                    <template x-if="totalLoadUnloadTime <= 0">
+                                        <span x-text="toMMSS(totalCycleTime)"></span>
+                                    </template>
                                 </span>
                                 <span class="text-gray-400">=</span>
 
@@ -452,6 +480,7 @@ function routingBuilder(config) {
                 machineTypeDefault:  s.machine_type_default ?? null,
                 overrideCycleTime:   s.standard_cycle_time != null ? String(s.standard_cycle_time) : '',
                 setupTime:           s.setup_time != null ? String(s.setup_time) : '',
+                loadUnloadTime:      s.load_unload_time != null ? String(s.load_unload_time) : '',
                 processType:         s.process_type ?? 'inhouse',
                 machineTypeRequired: s.machine_type_required ?? null,
                 notes:               s.notes ?? null,
@@ -505,20 +534,33 @@ function routingBuilder(config) {
             return this.toMMSS(this.totalSetupTime);
         },
 
-        // First-part lead time = setup (once) + one cycle
+        // Sum of per-part load/unload times across all steps
+        get totalLoadUnloadTime() {
+            return this.steps.reduce(function(sum, step) {
+                var t = parseFloat(step.loadUnloadTime);
+                return sum + (isNaN(t) || step.loadUnloadTime === '' ? 0 : t);
+            }, 0);
+        },
+
+        // Total time consumed per part = cycle + load/unload
+        get timePerPart() {
+            return this.totalCycleTime + this.totalLoadUnloadTime;
+        },
+
+        // First-part lead time = setup (once) + one cycle + one load/unload
         get firstPartTime() {
-            return this.totalSetupTime + this.totalCycleTime;
+            return this.totalSetupTime + this.timePerPart;
         },
 
         // Ideal qty per shift:
-        //   available = shiftMinutes - totalSetupTime
-        //   ideal     = floor(available / cyclePerPart)
+        //   available  = shiftMinutes - totalSetupTime
+        //   ideal      = floor(available / timePerPart)   (cycle + load/unload)
         get idealPerShift() {
-            var cycle = this.totalCycleTime;
-            if (cycle <= 0) return 0;
+            var perPart = this.timePerPart;
+            if (perPart <= 0) return 0;
             var available = (parseFloat(this.shiftMinutes) || 480) - this.totalSetupTime;
             if (available <= 0) return 0;
-            return Math.floor(available / cycle);
+            return Math.floor(available / perPart);
         },
 
         get filteredPalette() {
@@ -630,6 +672,7 @@ function routingBuilder(config) {
                 machineTypeDefault:  pm.machineType,
                 overrideCycleTime:   '',
                 setupTime:           '',
+                loadUnloadTime:      '',
                 processType:         'inhouse',
                 machineTypeRequired: pm.machineType,
                 notes:               null,
@@ -687,6 +730,8 @@ function routingBuilder(config) {
                                 ? parseFloat(s.overrideCycleTime) : null,
                             setup_time:            s.setupTime !== '' && s.setupTime != null
                                 ? parseFloat(s.setupTime) : null,
+                            load_unload_time:      s.loadUnloadTime !== '' && s.loadUnloadTime != null
+                                ? parseFloat(s.loadUnloadTime) : null,
                             process_type:          s.processType ?? 'inhouse',
                             notes:                 s.notes ?? null,
                         };
@@ -704,6 +749,7 @@ function routingBuilder(config) {
                             machineTypeDefault:  p.process_master?.machine_type_default ?? null,
                             overrideCycleTime:   p.standard_cycle_time != null ? String(p.standard_cycle_time) : '',
                             setupTime:           p.setup_time != null ? String(p.setup_time) : '',
+                            loadUnloadTime:      p.load_unload_time != null ? String(p.load_unload_time) : '',
                             processType:         p.process_type ?? 'inhouse',
                             machineTypeRequired: p.machine_type_required ?? null,
                             notes:               p.notes ?? null,

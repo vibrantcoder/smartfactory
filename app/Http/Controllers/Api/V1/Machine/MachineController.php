@@ -102,12 +102,12 @@ class MachineController extends Controller
     {
         $this->authorize('create', Machine::class);
 
-        $data = MachineData::fromRequest($request);
+        $data = MachineData::fromCreateRequest($request);
 
-        // factory_id is forced from auth user — NOT from request input
+        // factory_id: from auth user (factory-scoped users) or from request body (super-admin)
         $machine = Machine::create([
             ...$data->toArray(),
-            'factory_id'   => $request->user()->factory_id,
+            'factory_id'   => $request->user()->factory_id ?? $request->integer('factory_id'),
             'device_token' => hash('sha256', uniqid('mch_', true) . random_bytes(16)),
         ]);
 

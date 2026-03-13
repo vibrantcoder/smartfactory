@@ -28,7 +28,7 @@ class CreateMachineRequest extends FormRequest
 
     public function rules(): array
     {
-        $factoryId = $this->user()?->factory_id;
+        $factoryId = $this->user()?->factory_id ?? $this->integer('factory_id');
 
         return [
             'name'         => ['required', 'string', 'min:2', 'max:150'],

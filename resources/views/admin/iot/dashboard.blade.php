@@ -1430,10 +1430,8 @@ function iotDashboard(apiToken, factoryId, factories) {
                 const json   = await res.json();
                 this.oeeData = json.machines || [];
 
-                // Re-render charts if machine detail is open
-                if (this.detailOpen) {
-                    this.$nextTick(() => requestAnimationFrame(() => this.renderCharts()));
-                }
+                // OEE data refreshed — gauges/stats panels update reactively.
+                // Do NOT call renderCharts() here; loadChart() owns that lifecycle.
             } catch { /* silent */ } finally {
                 this.oeeLoading = false;
             }
@@ -1451,7 +1449,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 if (!res.ok) return;
                 const json    = await res.json();
                 this.trendData = json.trend || [];
-                setTimeout(() => this.renderTrendChart(), 80);
+                this.$nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => this.renderTrendChart())));
             } catch { /* silent */ } finally {
                 this.trendLoading = false;
             }
@@ -1459,32 +1457,35 @@ function iotDashboard(apiToken, factoryId, factories) {
 
         renderTrendChart() {
             const canvas = document.getElementById('trend-chart');
-            if (!canvas || !this.trendData.length) return;
-            if (this._trendChart) { this._trendChart.destroy(); this._trendChart = null; }
+            if (!(canvas instanceof HTMLCanvasElement) || !this.trendData.length) return;
+            if (canvas.offsetWidth === 0 && canvas.offsetHeight === 0) return;
+            if (this._trendChart) { try { this._trendChart.destroy(); } catch (_) {} this._trendChart = null; }
             const labels = this.trendData.map(r => {
                 const d = new Date(r.oee_date);
                 return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
             });
-            this._trendChart = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: 'OEE%',          data: this.trendData.map(r => r.avg_oee),          borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)', tension: 0.3, pointRadius: 3, fill: true },
-                        { label: 'Availability%', data: this.trendData.map(r => r.avg_availability), borderColor: '#22c55e', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
-                        { label: 'Performance%',  data: this.trendData.map(r => r.avg_performance),  borderColor: '#f59e0b', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
-                        { label: 'Quality%',      data: this.trendData.map(r => r.avg_quality),      borderColor: '#60a5fa', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
-                    ],
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-                    scales: {
-                        y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
-                        x: { ticks: { font: { size: 11 }, maxRotation: 0 }, grid: { display: false } },
+            try {
+                this._trendChart = new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'OEE%',          data: this.trendData.map(r => r.avg_oee),          borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)', tension: 0.3, pointRadius: 3, fill: true },
+                            { label: 'Availability%', data: this.trendData.map(r => r.avg_availability), borderColor: '#22c55e', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+                            { label: 'Performance%',  data: this.trendData.map(r => r.avg_performance),  borderColor: '#f59e0b', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+                            { label: 'Quality%',      data: this.trendData.map(r => r.avg_quality),      borderColor: '#60a5fa', backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+                        ],
                     },
-                },
-            });
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                        scales: {
+                            y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+                            x: { ticks: { font: { size: 11 }, maxRotation: 0 }, grid: { display: false } },
+                        },
+                    },
+                });
+            } catch (e) { console.warn('trend chart:', e.message); }
         },
 
         async loadShifts(factoryId) {
@@ -1527,9 +1528,10 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this.chartLoading = false;
             }
 
-            // Wait for Alpine to flush x-show changes, then wait one animation frame
-            // so the browser has painted and canvases have real dimensions before Chart.js runs.
-            this.$nextTick(() => requestAnimationFrame(() => this.renderCharts()));
+            // Wait for Alpine to flush x-show changes (nextTick), then TWO animation
+            // frames: first RAF triggers layout recalc for newly-visible canvases,
+            // second RAF fires after the browser has computed canvas dimensions.
+            this.$nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => this.renderCharts())));
             this.loadTimeline(machineId); // fire-and-forget; independent of chart render
         },
 
@@ -1669,12 +1671,15 @@ function iotDashboard(apiToken, factoryId, factories) {
 
             const labels = this.chartData.labels;
 
-            // Helper: get canvas only if it's a real HTMLCanvasElement in the DOM.
-            // Chart.js throws if given null or a non-canvas element.
-            // Also destroys any orphaned Chart.js instance still attached to the canvas.
+            // Helper: get canvas only if it's a real HTMLCanvasElement that is
+            // visible and has non-zero dimensions. Chart.js silently produces a
+            // 0×0 chart on a hidden canvas. Also destroys orphaned Chart.js instances.
             const getCanvas = id => {
                 const el = document.getElementById(id);
                 if (!(el instanceof HTMLCanvasElement)) return null;
+                // Skip if inside a display:none ancestor (offsetParent is null for hidden elements,
+                // except position:fixed — check offsetWidth as fallback)
+                if (el.offsetWidth === 0 && el.offsetHeight === 0) return null;
                 // Destroy any orphaned chart instance Chart.js tracks internally
                 const existing = Chart.getChart(el);
                 if (existing) { try { existing.destroy(); } catch (_) {} }
@@ -1843,7 +1848,8 @@ function iotDashboard(apiToken, factoryId, factories) {
 
             specs.forEach(spec => {
                 const ctx = document.getElementById(spec.id);
-                if (!ctx) return;
+                if (!(ctx instanceof HTMLCanvasElement)) return;
+                if (ctx.offsetWidth === 0 && ctx.offsetHeight === 0) return;
 
                 const val = spec.val;
                 const hasVal = val !== null && val !== undefined;
@@ -1854,29 +1860,31 @@ function iotDashboard(apiToken, factoryId, factories) {
                     arcColor = val >= 85 ? '#22c55e' : val >= 60 ? '#eab308' : '#ef4444';
                 }
 
-                this._charts[spec.key] = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        datasets: [{
-                            data: [displayVal, 100 - displayVal],
-                            backgroundColor: [arcColor, '#1e293b'],
-                            borderWidth: 0,
-                            borderRadius: hasVal ? [4, 0] : [0, 0],
-                        }],
-                    },
-                    options: {
-                        circumference: 180,
-                        rotation: 270,
-                        cutout: '72%',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: { enabled: false },
+                try {
+                    this._charts[spec.key] = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            datasets: [{
+                                data: [displayVal, 100 - displayVal],
+                                backgroundColor: [arcColor, '#1e293b'],
+                                borderWidth: 0,
+                                borderRadius: hasVal ? [4, 0] : [0, 0],
+                            }],
                         },
-                        animation: { duration: 900, easing: 'easeInOutQuart' },
-                    },
-                });
+                        options: {
+                            circumference: 180,
+                            rotation: 270,
+                            cutout: '72%',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: { enabled: false },
+                            },
+                            animation: { duration: 900, easing: 'easeInOutQuart' },
+                        },
+                    });
+                } catch (e) { console.warn('gauge chart:', e.message); }
             });
         },
 

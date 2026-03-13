@@ -484,8 +484,8 @@
                     <div class="grid grid-cols-3 gap-2 mb-3">
                         <div class="rounded-lg bg-white border border-emerald-100 px-3 py-2 text-center">
                             <p class="text-sm font-bold text-emerald-700"
-                               x-text="Number(editPlan.good_qty_sum || 0).toLocaleString()"></p>
-                            <p class="text-[10px] text-gray-400 mt-0.5">Good Today</p>
+                               x-text="Number(editPlan.iot_parts || editPlan.good_qty_sum || 0).toLocaleString()"></p>
+                            <p class="text-[10px] text-gray-400 mt-0.5">Produced (IoT)</p>
                         </div>
                         <div class="rounded-lg bg-white border border-red-100 px-3 py-2 text-center">
                             <p class="text-sm font-bold text-red-500"
@@ -495,7 +495,7 @@
                         <div class="rounded-lg bg-white border border-indigo-100 px-3 py-2 text-center">
                             <p class="text-sm font-bold text-indigo-700"
                                x-text="editPlan.planned_qty > 0
-                                   ? Math.round((editPlan.good_qty_sum||0) / editPlan.planned_qty * 100) + '%'
+                                   ? Math.round((editPlan.iot_parts || editPlan.good_qty_sum || 0) / editPlan.planned_qty * 100) + '%'
                                    : '—'"></p>
                             <p class="text-[10px] text-gray-400 mt-0.5">Attainment</p>
                         </div>
@@ -1050,17 +1050,17 @@
                                                             </svg>
                                                             <span x-text="plan.operator?.name"></span>
                                                         </p>
-                                                        {{-- Good Qty / Attainment bar --}}
-                                                        <template x-if="(plan.actual_qty_sum || 0) > 0">
+                                                        {{-- IoT Actual / Attainment bar --}}
+                                                        <template x-if="(plan.iot_parts || plan.good_qty_sum || 0) > 0">
                                                             <div class="mt-1.5">
                                                                 <div class="flex items-center justify-between text-[9px] font-medium opacity-80 mb-0.5">
-                                                                    <span>Good: <span x-text="Number(plan.good_qty_sum || 0).toLocaleString()"></span></span>
-                                                                    <span x-text="Math.round((plan.good_qty_sum||0) / plan.planned_qty * 100) + '%'"></span>
+                                                                    <span>Actual: <span x-text="Number(plan.iot_parts || plan.good_qty_sum || 0).toLocaleString()"></span> pcs</span>
+                                                                    <span x-text="Math.round((plan.iot_parts || plan.good_qty_sum || 0) / plan.planned_qty * 100) + '%'"></span>
                                                                 </div>
                                                                 <div class="h-1 w-full rounded-full bg-black/10 overflow-hidden">
                                                                     <div class="h-1 rounded-full transition-all"
-                                                                         :class="Math.round((plan.good_qty_sum||0)/plan.planned_qty*100) >= 100 ? 'bg-green-500' : 'bg-emerald-400'"
-                                                                         :style="`width:${Math.min(100,Math.round((plan.good_qty_sum||0)/plan.planned_qty*100))}%`"></div>
+                                                                         :class="Math.round((plan.iot_parts||plan.good_qty_sum||0)/plan.planned_qty*100) >= 100 ? 'bg-green-500' : 'bg-emerald-400'"
+                                                                         :style="`width:${Math.min(100,Math.round((plan.iot_parts||plan.good_qty_sum||0)/plan.planned_qty*100))}%`"></div>
                                                                 </div>
                                                             </div>
                                                         </template>
@@ -1267,7 +1267,7 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
                 const mid = plan.machine_id;
                 if (!map[mid]) map[mid] = { planned: 0, actual: 0 };
                 map[mid].planned += plan.planned_qty || 0;
-                map[mid].actual  += plan.good_qty_sum || 0;
+                map[mid].actual  += plan.iot_parts || plan.good_qty_sum || 0;
             }
             return map;
         },

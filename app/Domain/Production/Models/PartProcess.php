@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int         $process_master_id
  * @property int         $sequence_order            1-based; UNIQUE per part
  * @property string|null $machine_type_required     restricts eligible machines
- * @property float|null  $standard_cycle_time       overrides process_master.standard_time
+ * @property float|null  $standard_cycle_time       part-specific cycle time override
  * @property float|null  $setup_time                setup/changeover time in minutes
  * @property string      $process_type              'inhouse' or 'outside'
  * @property string|null $notes
@@ -69,9 +69,7 @@ class PartProcess extends BaseModel
     // ── Accessors ─────────────────────────────────────────────
 
     /**
-     * Effective cycle time — uses part-specific override if set,
-     * otherwise falls back to process master standard.
-     * Lazy-loads processMaster if not already loaded.
+     * Effective cycle time — uses part-specific override if set, otherwise 0.0.
      */
     public function effectiveCycleTime(): float
     {
@@ -79,6 +77,6 @@ class PartProcess extends BaseModel
             return (float) $this->standard_cycle_time;
         }
 
-        return (float) ($this->processMaster?->standard_time ?? 0.0);
+        return 0.0;
     }
 }

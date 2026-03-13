@@ -84,7 +84,7 @@ class PartQueryBuilder extends Builder
     {
         return $this->with([
             'processes' => fn($q) => $q
-                ->with('processMaster:id,name,code,standard_time,machine_type_default')
+                ->with('processMaster:id,name,code,machine_type_default')
                 ->orderBy('sequence_order'),
         ]);
     }

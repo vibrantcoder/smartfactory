@@ -19,8 +19,7 @@ use Illuminate\Support\Collection;
  * CYCLE TIME CALCULATION DESIGN:
  *   Each routing step has an effective cycle time:
  *     - Use part_processes.standard_cycle_time if explicitly overridden
- *     - Otherwise fall back to process_masters.standard_time
- *     - If neither is set, contributes 0 minutes
+ *     - Otherwise contributes 0 minutes
  *
  *   computeTotalCycleTime() accepts the raw steps array (before DB save) and
  *   a keyed Collection of ProcessMasters to avoid N+1 queries.
@@ -52,7 +51,6 @@ class ProcessMasterService
 
     /**
      * All active process masters for the routing builder palette.
-     * Returns standard_time so the frontend can calculate totals locally.
      */
     public function palette(): Collection
     {
@@ -145,8 +143,7 @@ class ProcessMasterService
             return $override;
         }
 
-        $master = $processMasters->get($processMasterId);
-        return (float) ($master?->standard_time ?? 0.0);
+        return 0.0;
     }
 
     /**
@@ -175,7 +172,7 @@ class ProcessMasterService
                 'override_cycle_time'   => isset($step['standard_cycle_time'])
                                               ? (float) $step['standard_cycle_time']
                                               : null,
-                'default_cycle_time'    => (float) ($processMasters->get($step['process_master_id'])?->standard_time ?? 0),
+                'default_cycle_time'    => 0.0,
                 'effective_cycle_time'  => $effectiveTime,
             ];
         })->values()->all();

@@ -18,7 +18,6 @@ readonly class ProcessMasterData
     public function __construct(
         public string  $name,
         public string  $code,
-        public ?float  $standardTime,
         public ?string $machineTypeDefault,
         public string  $processType,
         public ?string $description,
@@ -30,9 +29,6 @@ readonly class ProcessMasterData
         return new self(
             name:               $request->validated('name'),
             code:               strtoupper($request->validated('code')),
-            standardTime:       $request->validated('standard_time') !== null
-                                    ? (float) $request->validated('standard_time')
-                                    : null,
             machineTypeDefault: $request->validated('machine_type_default'),
             processType:        $request->validated('process_type') ?? 'inhouse',
             description:        $request->validated('description'),
@@ -45,9 +41,6 @@ readonly class ProcessMasterData
         return new self(
             name:               $request->validated('name'),
             code:               strtoupper($request->validated('code')),
-            standardTime:       $request->validated('standard_time') !== null
-                                    ? (float) $request->validated('standard_time')
-                                    : null,
             machineTypeDefault: $request->validated('machine_type_default'),
             processType:        $request->validated('process_type') ?? 'inhouse',
             description:        $request->validated('description'),
@@ -60,7 +53,6 @@ readonly class ProcessMasterData
         return [
             'name'                 => $this->name,
             'code'                 => $this->code,
-            'standard_time'        => $this->standardTime ?? 0, // NOT NULL column — default to 0
             'machine_type_default' => $this->machineTypeDefault,
             'process_type'         => $this->processType,
             'description'          => $this->description,

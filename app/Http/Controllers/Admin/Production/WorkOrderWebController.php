@@ -33,7 +33,7 @@ class WorkOrderWebController extends Controller
 
         $parts = Part::where('status', 'active')
             ->with(['processes' => fn($q) => $q
-                ->with('processMaster:id,name,code,standard_time')
+                ->with('processMaster:id,name,code')
                 ->orderBy('sequence_order')])
             ->orderBy('part_number')
             ->get(['id', 'name', 'part_number', 'customer_id', 'factory_id', 'unit', 'cycle_time_std', 'total_cycle_time'])

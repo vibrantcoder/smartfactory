@@ -63,9 +63,6 @@ class PartResource extends JsonResource
                             'id'                   => $process->processMaster->id,
                             'name'                 => $process->processMaster->name,
                             'code'                 => $process->processMaster->code,
-                            'standard_time'        => $process->processMaster->standard_time
-                                ? (float) $process->processMaster->standard_time
-                                : null,
                             'machine_type_default' => $process->processMaster->machine_type_default,
                         ]
                         : null,

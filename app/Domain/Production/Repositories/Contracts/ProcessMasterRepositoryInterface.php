@@ -29,7 +29,7 @@ interface ProcessMasterRepositoryInterface
 
     /**
      * All active process masters — used to populate the routing builder palette.
-     * Returns full objects so the frontend has standard_time for live calculation.
+     * Returns full objects for the routing builder palette.
      */
     public function allActive(): Collection;
 

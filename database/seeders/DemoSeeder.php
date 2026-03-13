@@ -159,7 +159,6 @@ class DemoSeeder extends Seeder
             [
                 'name'                 => 'CNC Turning',
                 'machine_type_default' => 'CNC Lathe',
-                'standard_time'        => 12.50,
                 'description'          => 'Rough and finish turning on CNC lathe',
                 'is_active'            => true,
             ]
@@ -169,7 +168,6 @@ class DemoSeeder extends Seeder
             [
                 'name'                 => 'CNC Milling',
                 'machine_type_default' => 'Milling',
-                'standard_time'        => 18.00,
                 'description'          => 'Multi-axis milling operation',
                 'is_active'            => true,
             ]
@@ -179,7 +177,6 @@ class DemoSeeder extends Seeder
             [
                 'name'                 => 'CMM Inspection',
                 'machine_type_default' => 'Inspection',
-                'standard_time'        => 5.00,
                 'description'          => 'Dimensional inspection on CMM',
                 'is_active'            => true,
             ]
@@ -189,7 +186,6 @@ class DemoSeeder extends Seeder
             [
                 'name'                 => 'Surface Grinding',
                 'machine_type_default' => 'Grinding',
-                'standard_time'        => 8.00,
                 'description'          => 'Surface grinding for finish',
                 'is_active'            => true,
             ]
@@ -199,7 +195,6 @@ class DemoSeeder extends Seeder
             [
                 'name'                 => 'CNC Drilling',
                 'machine_type_default' => 'Drilling',
-                'standard_time'        => 6.00,
                 'description'          => 'Precision drilling and tapping',
                 'is_active'            => true,
             ]
@@ -209,7 +204,6 @@ class DemoSeeder extends Seeder
             [
                 'name'                 => 'MIG Welding',
                 'machine_type_default' => 'Welding',
-                'standard_time'        => 15.00,
                 'description'          => 'MIG welding and assembly',
                 'is_active'            => true,
             ]

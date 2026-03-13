@@ -57,7 +57,7 @@ class PartRoutingController extends Controller
         // Load full routing with process master details for initial render
         $part->loadMissing('processes.processMaster');
 
-        // Palette: all active process masters with standard_time for JS calculation
+        // Palette: all active process masters for the routing builder
         $palette = $this->processMasterService->palette();
 
         // Shape $initialSteps for the Alpine component

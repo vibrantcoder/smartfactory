@@ -215,7 +215,6 @@ class ProductionSchedulingService
                 production_plans.planned_qty *
                 COALESCE(
                     part_processes.standard_cycle_time,
-                    process_masters.standard_time,
                     NULLIF(parts.total_cycle_time, 0),
                     parts.cycle_time_std / 60,
                     0

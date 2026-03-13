@@ -634,15 +634,15 @@
                                 x-text="selectedMachine?.last_seen ? timeAgo(selectedMachine.last_seen) : 'No data'"></dd>
                         </div>
                         <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
-                            <dt class="text-slate-500">Part Count</dt>
+                            <dt class="text-slate-500">Parts</dt>
                             <dd class="font-bold text-white tabular-nums text-base"
-                                x-text="(selectedMachine?.part_count || 0).toLocaleString()"></dd>
+                                x-text="(chartData?.summary?.total_parts ?? 0).toLocaleString()"></dd>
                         </div>
                         <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
                             <dt class="text-slate-500">Rejects</dt>
                             <dd class="font-bold tabular-nums text-base"
-                                :class="(selectedMachine?.part_reject || 0) > 0 ? 'text-red-400' : 'text-slate-400'"
-                                x-text="(selectedMachine?.part_reject || 0).toLocaleString()"></dd>
+                                :class="(chartData?.summary?.total_rejects || 0) > 0 ? 'text-red-400' : 'text-slate-400'"
+                                x-text="(chartData?.summary?.total_rejects || 0).toLocaleString()"></dd>
                         </div>
                         <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
                             <dt class="text-slate-500">Slave / PLC</dt>
@@ -929,7 +929,9 @@
                     </div>
                     <div class="flex justify-between text-xs text-gray-500">
                         <span>Rejects</span>
-                        <span class="font-mono" :class="m.part_reject > 0 ? 'text-red-600 font-semibold' : ''" x-text="m.part_reject.toLocaleString()"></span>
+                        <span class="font-mono"
+                              :class="(getMachineRejects(m.id) ?? m.part_reject) > 0 ? 'text-red-600 font-semibold' : ''"
+                              x-text="getMachineRejects(m.id) !== null ? getMachineRejects(m.id).toLocaleString() : m.part_reject.toLocaleString()"></span>
                     </div>
 
                     {{-- Last seen --}}
@@ -1262,6 +1264,11 @@ function iotDashboard(apiToken, factoryId, factories) {
             const m = this.oeeData.find(m => m.machine.id === machineId);
             if (!m) return null;
             return m.shifts.reduce((s, sh) => s + (sh.total_parts || 0), 0);
+        },
+        getMachineRejects(machineId) {
+            const m = this.oeeData.find(m => m.machine.id === machineId);
+            if (!m) return null;
+            return m.shifts.reduce((s, sh) => s + (sh.reject_parts || 0), 0);
         },
         get fleetAvgOee() {
             const vals = this.oeeData.flatMap(m => m.shifts.map(s => s.oee_pct)).filter(v => v !== null);

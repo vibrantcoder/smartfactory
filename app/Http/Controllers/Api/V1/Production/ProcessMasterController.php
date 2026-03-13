@@ -59,8 +59,7 @@ class ProcessMasterController extends Controller
      * Lightweight endpoint for the routing builder palette.
      * GET /api/v1/process-masters/palette
      *
-     * Returns all active process masters with standard_time so the
-     * frontend can calculate total cycle time locally without extra calls.
+     * Returns all active process masters for the routing builder palette.
      */
     public function palette(): AnonymousResourceCollection
     {

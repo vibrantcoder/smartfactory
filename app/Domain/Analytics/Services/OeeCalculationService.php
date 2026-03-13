@@ -13,6 +13,7 @@ use App\Domain\Production\Models\ProductionPlan;
 use App\Domain\Production\Models\Shift;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * OeeCalculationService
@@ -20,9 +21,10 @@ use Illuminate\Support\Collection;
  * Calculates OEE (Overall Equipment Effectiveness) from raw IoT pulse data.
  *
  * INPUT  — iot_logs.part_count is a PULSE signal:
- *   Each record with part_count = 1 means ONE part completed at that log interval.
- *   SUM(part_count) over any window = total parts produced in that window.
- *   SUM(part_reject) = total rejects in that window.
+ *   The device holds part_count=1 for multiple consecutive rows per part.
+ *   We count 0→1 rising-edge transitions (LAG window function) to get the
+ *   true part count — not SUM, which would double-count consecutive 1s.
+ *   Same logic applies to part_reject.
  *   Records with alarm_code > 0 = machine was in fault during that interval.
  *
  * OEE FORMULA:
@@ -61,17 +63,40 @@ class OeeCalculationService
         $settings       = FactorySettings::resolveFor($machine->factory_id);
         $logIntervalSec = max(1, (int) ($settings->log_interval_seconds ?? 5));
 
-        // ── Aggregate iot_logs in one query ──────────────────────────
-        $stats = IotLog::where('machine_id', $machine->id)
-            ->where('logged_at', '>=', $windowStart)
-            ->where('logged_at', '<',  $windowEnd)
-            ->selectRaw(
-                'COUNT(*)                                      AS log_count,
-                 SUM(CASE WHEN alarm_code > 0 THEN 1 ELSE 0 END) AS alarm_records,
-                 COALESCE(SUM(part_count),  0)                AS total_parts,
-                 COALESCE(SUM(part_reject), 0)                AS total_rejects'
-            )
-            ->first();
+        // ── Seed LAG from the row just before the window ─────────────
+        // Without this, the first row of each shift window gets prev_pc = 0,
+        // which falsely counts a 0→1 transition if the previous shift ended
+        // with part_count = 1 still held.
+        $seed  = DB::selectOne(
+            "SELECT part_count, part_reject FROM iot_logs
+              WHERE machine_id = ? AND logged_at < ?
+              ORDER BY logged_at DESC LIMIT 1",
+            [$machine->id, $windowStart]
+        );
+        $seedPc = (int) ($seed?->part_count ?? 0);
+        $seedPr = (int) ($seed?->part_reject ?? 0);
+
+        // ── Aggregate iot_logs — count 0→1 transitions only ─────────
+        // LAG default is seeded from the row before the window so shift
+        // boundaries don't add phantom parts.
+        $stats = DB::selectOne("
+            SELECT
+                COUNT(*)                                                        AS log_count,
+                SUM(CASE WHEN alarm_code > 0 THEN 1 ELSE 0 END)               AS alarm_records,
+                COALESCE(SUM(CASE WHEN part_count  = 1 AND prev_pc = 0
+                                  THEN 1 ELSE 0 END), 0)                       AS total_parts,
+                COALESCE(SUM(CASE WHEN part_reject = 1 AND prev_pr = 0
+                                  THEN 1 ELSE 0 END), 0)                       AS total_rejects
+            FROM (
+                SELECT alarm_code,
+                       part_count,
+                       part_reject,
+                       COALESCE(LAG(part_count,  1) OVER (ORDER BY logged_at, id), ?) AS prev_pc,
+                       COALESCE(LAG(part_reject, 1) OVER (ORDER BY logged_at, id), ?) AS prev_pr
+                FROM iot_logs
+                WHERE machine_id = ? AND logged_at >= ? AND logged_at < ?
+            ) sub
+        ", [$seedPc, $seedPr, $machine->id, $windowStart, $windowEnd]);
 
         $logCount     = (int) ($stats->log_count ?? 0);
         $alarmRecords = (int) ($stats->alarm_records ?? 0);

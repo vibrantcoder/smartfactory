@@ -21,7 +21,7 @@ use Illuminate\Support\Collection;
  *   1. Client sends ordered processes array to syncRouting()
  *   2. Service fetches ProcessMasters in one batched query (findManyByIds)
  *   3. Service computes total_cycle_time: sum of each step's effective time
- *      (override minutes if set, else master's standard_time)
+ *      (part-level override if set, else 0.0)
  *   4. Service passes computed total to repository
  *   5. Repository saves routing steps + total_cycle_time atomically in one transaction
  *
@@ -139,8 +139,7 @@ class PartService
         // Batch-fetch all referenced process masters in ONE query (keyed by id).
         // Then sum each step's effective cycle time:
         //   step.standard_cycle_time  (if explicitly overridden)  ← part-specific
-        //   processMaster.standard_time (fallback)                ← library default
-        //   0.0                       (if neither set)
+        //   0.0                       (if not set)
         //
         $masterIds      = array_column($processes, 'process_master_id');
         $processMasters = $this->processMasterRepository->findManyByIds($masterIds);
@@ -175,10 +174,7 @@ class PartService
                     return $total + $override;
                 }
 
-                $masterId = (int) $step['process_master_id'];
-                $master   = $processMasters->get($masterId);
-
-                return $total + (float) ($master?->standard_time ?? 0.0);
+                return $total + 0.0;
             },
             0.0
         );

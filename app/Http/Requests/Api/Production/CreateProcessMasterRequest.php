@@ -26,7 +26,6 @@ class CreateProcessMasterRequest extends FormRequest
                 'regex:/^[A-Z0-9_\-]+$/i',
                 Rule::unique('process_masters', 'code'),
             ],
-            'standard_time'        => ['nullable', 'numeric', 'min:0.01', 'max:9999.99'],
             'machine_type_default' => ['nullable', 'string', 'max:50'],
             'process_type'         => ['nullable', 'string', 'in:inhouse,outside'],
             'description'          => ['nullable', 'string', 'max:500'],

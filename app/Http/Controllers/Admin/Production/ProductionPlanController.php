@@ -38,7 +38,7 @@ class ProductionPlanController extends Controller
 
         $parts = Part::where('status', 'active')
             ->when($factoryId, fn ($q) => $q->where('factory_id', $factoryId))
-            ->with(['processes' => fn ($q) => $q->orderBy('sequence_order')->with('processMaster:id,name,standard_time')])
+            ->with(['processes' => fn ($q) => $q->orderBy('sequence_order')->with('processMaster:id,name')])
             ->orderBy('part_number')
             ->get(['id', 'name', 'part_number', 'cycle_time_std', 'total_cycle_time', 'factory_id']);
 

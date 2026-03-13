@@ -55,7 +55,6 @@ class ProductionCalculatorService
      *
      * Each step's effective time resolves as:
      *   part_processes.standard_cycle_time   (override — if set)
-     *   ?? process_masters.standard_time     (library default)
      *   ?? 0.0                               (unset — step has no time cost)
      *
      * @param  Collection<PartProcess> $processes

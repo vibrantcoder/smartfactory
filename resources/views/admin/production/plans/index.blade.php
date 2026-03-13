@@ -1403,7 +1403,7 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
         effectiveCycleTime(step) {
             const override = parseFloat(step.standard_cycle_time);
             if (!isNaN(override) && override > 0) return override;
-            return parseFloat(step.process_master?.standard_time) || 0;
+            return 0;
         },
 
         get modalSubtitle() {

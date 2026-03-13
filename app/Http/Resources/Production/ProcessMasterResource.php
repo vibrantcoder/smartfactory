@@ -9,9 +9,6 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * ProcessMasterResource
- *
- * standard_time exposed as float so the frontend routing builder can use it
- * directly for live cycle time calculation without type coercion.
  */
 class ProcessMasterResource extends JsonResource
 {
@@ -21,9 +18,6 @@ class ProcessMasterResource extends JsonResource
             'id'                   => $this->id,
             'name'                 => $this->name,
             'code'                 => $this->code,
-            'standard_time'        => $this->standard_time !== null
-                                          ? (float) $this->standard_time
-                                          : null,
             'machine_type_default' => $this->machine_type_default,
             'process_type'         => $this->process_type ?? 'inhouse',
             'description'          => $this->description,

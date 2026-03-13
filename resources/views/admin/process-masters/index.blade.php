@@ -312,21 +312,6 @@
                     </datalist>
                 </div>
 
-                {{-- Standard Time --}}
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                        Standard Cycle Time
-                        <span class="text-xs text-gray-400 font-normal">minutes per cycle — optional</span>
-                    </label>
-                    <div class="relative">
-                        <input x-model="form.standard_time"
-                               type="number" min="0.01" max="9999.99" step="0.01"
-                               placeholder="e.g. 2.50"
-                               class="w-full rounded-lg border border-gray-300 px-3 py-2 pr-14 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"/>
-                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">min</span>
-                    </div>
-                </div>
-
                 {{-- Description --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -545,7 +530,7 @@ function processMasters(apiToken) {
 
         // ── Modal helpers ────────────────────────────────────────
         blankForm() {
-            return { name: '', code: '', process_type: 'inhouse', standard_time: '', machine_type_default: '', description: '', is_active: true };
+            return { name: '', code: '', process_type: 'inhouse', machine_type_default: '', description: '', is_active: true };
         },
 
         openCreate() {
@@ -561,7 +546,6 @@ function processMasters(apiToken) {
                 name:                 item.name,
                 code:                 item.code,
                 process_type:         item.process_type ?? 'inhouse',
-                standard_time:        item.standard_time ?? '',
                 machine_type_default: item.machine_type_default ?? '',
                 description:          item.description ?? '',
                 is_active:            item.is_active,
@@ -589,7 +573,6 @@ function processMasters(apiToken) {
                 name:                 this.form.name.trim(),
                 code:                 this.form.code.trim().toUpperCase(),
                 process_type:         this.form.process_type,
-                standard_time:        this.form.standard_time !== '' ? parseFloat(this.form.standard_time) : null,
                 machine_type_default: this.form.machine_type_default.trim() || null,
                 description:          this.form.description.trim() || null,
             };

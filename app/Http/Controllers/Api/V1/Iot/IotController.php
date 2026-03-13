@@ -269,8 +269,8 @@ class IotController extends Controller
      * Returns hourly aggregated telemetry for Chart.js rendering.
      *
      * part_count and part_reject are BINARY PULSE signals (0 or 1 per record).
-     * A value of 1 means one part completed / one reject in that scan cycle.
-     * We use SUM() — not MAX-MIN — to count pulses correctly.
+     * The device can hold the signal at 1 for multiple consecutive rows.
+     * We count 0→1 rising-edge transitions (LAG) to avoid double-counting.
      */
     public function machineChart(Request $request, Machine $machine): JsonResponse
     {
@@ -280,24 +280,48 @@ class IotController extends Controller
         [$since, $until, $hours] = $this->resolveTimeWindow($request);
 
 
+        // part_count / part_reject are PULSE signals held at 1 for multiple rows.
+        // Count only 0→1 rising-edge transitions (LAG) to avoid double-counting.
+        // Seed the default from the row just before the window so the first row
+        // of a shift doesn't falsely trigger a transition if the signal was
+        // already high at the end of the previous period.
+        $machineId = $machine->id;
+        $seed = DB::selectOne(
+            "SELECT part_count, part_reject FROM iot_logs
+              WHERE machine_id = ? AND logged_at < ?
+              ORDER BY logged_at DESC LIMIT 1",
+            [$machineId, $since]
+        );
+        $seedPc = (int) ($seed?->part_count ?? 0);
+        $seedPr = (int) ($seed?->part_reject ?? 0);
+
+        $rows = DB::select("
+            SELECT
+                DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')                                          AS hour,
+                SUM(CASE WHEN part_count  = 1 AND prev_pc = 0 THEN 1 ELSE 0 END)                    AS parts_sum,
+                SUM(CASE WHEN part_reject = 1 AND prev_pr = 0 THEN 1 ELSE 0 END)                    AS rejects_sum,
+                SUM(CASE WHEN alarm_code > 0 AND cycle_state = 0 THEN 1 ELSE 0 END)                 AS alarm_events,
+                SUM(CASE WHEN cycle_state = 1                    THEN 1 ELSE 0 END)                 AS run_ticks_hr,
+                SUM(CASE WHEN cycle_state = 0 AND alarm_code = 0 THEN 1 ELSE 0 END)                 AS idle_ticks_hr,
+                COUNT(*)                                                                              AS samples
+            FROM (
+                SELECT *,
+                       COALESCE(LAG(part_count,  1) OVER (ORDER BY logged_at, id), ?) AS prev_pc,
+                       COALESCE(LAG(part_reject, 1) OVER (ORDER BY logged_at, id), ?) AS prev_pr
+                FROM iot_logs
+                WHERE machine_id = ? AND logged_at >= ? AND logged_at < ?
+            ) sub
+            GROUP BY DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')
+            ORDER BY hour
+        ", [$seedPc, $seedPr, $machineId, $since, $until]);
+
+        $rows = collect($rows);
+
+        // Keep a plain base query for the time-state breakdown (no LAG needed there)
         $baseQuery = DB::table('iot_logs')
             ->where('machine_id', $machine->id)
             ->where('logged_at', '>=', $since)
             ->where('logged_at', '<', $until);
-
-        $rows = (clone $baseQuery)
-            ->selectRaw("
-                DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')                                    AS hour,
-                COALESCE(SUM(part_count),  0)                                                   AS parts_sum,
-                COALESCE(SUM(part_reject), 0)                                                   AS rejects_sum,
-                SUM(CASE WHEN alarm_code > 0 AND cycle_state = 0 THEN 1 ELSE 0 END)            AS alarm_events,
-                SUM(CASE WHEN cycle_state = 1                    THEN 1 ELSE 0 END)            AS run_ticks_hr,
-                SUM(CASE WHEN cycle_state = 0 AND alarm_code = 0 THEN 1 ELSE 0 END)            AS idle_ticks_hr,
-                COUNT(*)                                                                         AS samples
-            ")
-            ->groupByRaw("DATE_FORMAT(logged_at, '%Y-%m-%d %H:00:00')")
-            ->orderBy('hour')
-            ->get();
 
         // Time-state breakdown for the whole period
         // State logic (running beats alarm — device may send alarm_code while cycle is active):

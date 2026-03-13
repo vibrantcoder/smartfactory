@@ -71,7 +71,7 @@ class EloquentProcessMasterRepository implements ProcessMasterRepositoryInterfac
             ->active()
             ->forMachineType($machineType)
             ->ordered()
-            ->select(['id', 'name', 'code', 'standard_time', 'machine_type_default'])
+            ->select(['id', 'name', 'code', 'machine_type_default'])
             ->get();
     }
 
@@ -82,7 +82,7 @@ class EloquentProcessMasterRepository implements ProcessMasterRepositoryInterfac
     public function findManyByIds(array $ids): Collection
     {
         return ProcessMaster::whereIn('id', array_unique($ids))
-            ->select(['id', 'standard_time'])
+            ->select(['id'])
             ->get()
             ->keyBy('id');
     }

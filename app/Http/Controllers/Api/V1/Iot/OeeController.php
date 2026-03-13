@@ -377,6 +377,7 @@ class OeeController extends Controller
             $machine, $shift, $date,
             $plan?->planned_qty,
             $plan?->part?->cycle_time_std !== null ? (float) $plan->part->cycle_time_std : null,
+            $plan?->id,
         );
 
         return array_merge($oee->toArray(), ['_source' => 'live']);

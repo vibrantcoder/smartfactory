@@ -9,6 +9,7 @@ use App\Domain\Machine\Models\Machine;
 use App\Domain\Production\Models\Shift;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -59,6 +60,9 @@ class OeeAggregationService
                 $rows++;
             }
         }
+
+        // Bust the API response cache so the dashboard immediately sees fresh data
+        Cache::forget("factory_oee_{$factoryId}_{$dateStr}");
 
         Log::info("OEE aggregation complete", [
             'factory_id' => $factoryId,

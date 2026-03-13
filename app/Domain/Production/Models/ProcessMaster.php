@@ -14,16 +14,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Defines reusable manufacturing process types (Laser Cutting, Bending, Welding…).
  * NOT factory-scoped: shared across all factories (global reference table).
  *
- * standard_time is the DEFAULT cycle time per step in MINUTES.
- * Parts may override it per routing step in part_processes.standard_cycle_time.
- * effectiveCycleTime() on PartProcess resolves which value to use.
- *
  * UNIT CONVENTION: all cycle times in this system are MINUTES.
  *
  * @property int         $id
  * @property string      $name                  e.g. "Laser Cutting"
  * @property string      $code                  e.g. "LASER" — globally unique
- * @property float|null  $standard_time         minutes per cycle (default)
  * @property string|null $machine_type_default  default machine type for routing steps
  * @property string      $process_type          'inhouse' or 'outside'
  * @property string|null $description
@@ -40,7 +35,6 @@ class ProcessMaster extends BaseModel
     protected $fillable = [
         'name',
         'code',
-        'standard_time',
         'machine_type_default',
         'process_type',
         'description',
@@ -51,8 +45,7 @@ class ProcessMaster extends BaseModel
     {
         return [
             ...parent::casts(),
-            'standard_time' => 'decimal:2',
-            'is_active'     => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 

@@ -84,6 +84,16 @@
                 Downtime
             </a>
 
+            <a href="{{ route('admin.reject-reasons.index') }}"
+               class="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
+                      {{ request()->routeIs('admin.reject-reasons.*') ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}">
+                <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Reject Reasons
+            </a>
+
             @can('has-minimum-role', 'factory-admin')
             <a href="{{ route('admin.users.index') }}"
                class="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors

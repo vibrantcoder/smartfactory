@@ -25,6 +25,18 @@ Schedule::command('iot:aggregate-oee')
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/oee-aggregation.log'));
 
+// ── IoT OEE — Shift-End Trigger (10 min after shift ends) ────────────────────
+//
+// Runs every minute. Detects any shift whose end_time was ~10 minutes ago
+// and immediately aggregates OEE for that factory + date.
+// This ensures the final shift OEE is captured promptly after production stops.
+//
+Schedule::command('iot:shift-end-oee')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/oee-aggregation.log'));
+
 // ── IoT Log Purge ─────────────────────────────────────────────────────────────
 //
 // Runs daily at 00:30 (after midnight) to keep iot_logs lean.

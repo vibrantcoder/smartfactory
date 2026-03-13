@@ -68,6 +68,12 @@ Route::middleware(['auth:sanctum', 'factory.scope', 'factory.member'])
         Route::post  ('parts/{part}/drawings',              [\App\Http\Controllers\Api\V1\Production\PartDrawingController::class, 'store'])->name('parts.drawings.store');
         Route::delete('parts/{part}/drawings/{drawing}',    [\App\Http\Controllers\Api\V1\Production\PartDrawingController::class, 'destroy'])->name('parts.drawings.destroy');
 
+        // ── Reject Reasons ────────────────────────────────────────────────
+        Route::get   ('reject-reasons',      [\App\Http\Controllers\Api\V1\Production\RejectReasonController::class, 'index']);
+        Route::post  ('reject-reasons',      [\App\Http\Controllers\Api\V1\Production\RejectReasonController::class, 'store']);
+        Route::put   ('reject-reasons/{id}', [\App\Http\Controllers\Api\V1\Production\RejectReasonController::class, 'update']);
+        Route::delete('reject-reasons/{id}', [\App\Http\Controllers\Api\V1\Production\RejectReasonController::class, 'destroy']);
+
         // ── Process Masters ───────────────────────────────────────────────
         Route::apiResource('process-masters', \App\Http\Controllers\Api\V1\Production\ProcessMasterController::class);
         Route::get('process-masters-palette',

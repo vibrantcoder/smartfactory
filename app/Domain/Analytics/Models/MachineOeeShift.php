@@ -61,6 +61,7 @@ class MachineOeeShift extends BaseModel
         'attainment_pct',
         'log_count',
         'log_interval_seconds',
+        'chart_data',
         'calculated_at',
     ];
 
@@ -74,6 +75,7 @@ class MachineOeeShift extends BaseModel
             'quality_pct'          => 'float',
             'oee_pct'              => 'float',
             'attainment_pct'       => 'float',
+            'chart_data'           => 'array',
             'calculated_at'        => 'datetime',
         ];
     }

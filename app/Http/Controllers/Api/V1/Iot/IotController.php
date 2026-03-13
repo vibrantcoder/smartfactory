@@ -276,6 +276,57 @@ class IotController extends Controller
     {
         $this->authorize('view', $machine);
 
+        // ── Serve stored chart data for past-date queries ────────────────────
+        // Once raw iot_logs are purged, the dashboard reads the JSON snapshot
+        // that was saved to machine_oee_shifts during final OEE aggregation.
+        // Applies to any past date (strictly before today).
+        //   • With shift_id  → return that shift's stored chart_data directly.
+        //   • Without shift_id (All Day) → merge all shifts' stored chart_data.
+        $shiftIdParam = $request->query('shift_id');
+        $dateParam    = $request->query('date');
+
+        if ($dateParam) {
+            $queryDate = \Carbon\Carbon::parse($dateParam)->startOfDay();
+            $isToday   = $queryDate->isSameDay(\Carbon\Carbon::today());
+
+            if (! $isToday) {
+                $storedRows = DB::table('machine_oee_shifts')
+                    ->where('machine_id', $machine->id)
+                    ->where('oee_date',   $dateParam)
+                    ->whereNotNull('chart_data')
+                    ->when($shiftIdParam, fn ($q) => $q->where('shift_id', (int) $shiftIdParam))
+                    ->get(['shift_id', 'chart_data']);
+
+                if ($storedRows->isNotEmpty()) {
+                    // Single shift — return directly
+                    if ($shiftIdParam || $storedRows->count() === 1) {
+                        $row       = $storedRows->first();
+                        $chartData = json_decode($row->chart_data, true);
+                        $shiftObj  = \App\Domain\Production\Models\Shift::find((int) ($shiftIdParam ?? $row->shift_id));
+                        $hours     = $shiftObj ? (int) ceil($shiftObj->duration_min / 60) : 8;
+                    } else {
+                        // All Day — merge all shifts by merging their hourly arrays
+                        $chartData = $this->mergeStoredChartData($storedRows);
+                        $hours     = 24;
+                    }
+
+                    return response()->json(array_merge(
+                        [
+                            'machine' => [
+                                'id'   => $machine->id,
+                                'name' => $machine->name,
+                                'code' => $machine->code,
+                                'type' => $machine->type,
+                            ],
+                            'period_hours' => $hours,
+                            'source'       => 'stored',
+                        ],
+                        $chartData
+                    ));
+                }
+            }
+        }
+
         // Shift-based window takes priority over hours
         [$since, $until, $hours] = $this->resolveTimeWindow($request);
 
@@ -444,6 +495,32 @@ class IotController extends Controller
     {
         $this->authorize('view', $machine);
 
+        // ── Serve stored timeline for past-date queries ───────────────────────
+        // Reconstruct timeline segments from the hourly chart_data snapshot.
+        $shiftIdTl = $request->query('shift_id');
+        $dateTl    = $request->query('date');
+
+        if ($dateTl) {
+            $tldDate  = \Carbon\Carbon::parse($dateTl)->startOfDay();
+            $tlIsToday = $tldDate->isSameDay(\Carbon\Carbon::today());
+
+            if (! $tlIsToday) {
+                $tlRows = DB::table('machine_oee_shifts')
+                    ->where('machine_id', $machine->id)
+                    ->where('oee_date',   $dateTl)
+                    ->whereNotNull('chart_data')
+                    ->when($shiftIdTl, fn ($q) => $q->where('shift_id', (int) $shiftIdTl))
+                    ->get(['shift_id', 'chart_data']);
+
+                if ($tlRows->isNotEmpty()) {
+                    [$since, $until] = $this->resolveTimeWindow($request);
+                    return response()->json(
+                        $this->timelineFromStoredChart($tlRows, $since, $until)
+                    );
+                }
+            }
+        }
+
         [$since, $until] = $this->resolveTimeWindow($request);
 
         $bucketSec = 300; // 5-minute buckets
@@ -588,6 +665,169 @@ class IotController extends Controller
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    // ── Stored-data helpers ───────────────────────────────────
+
+    /**
+     * Merge multiple shifts' stored chart_data into a single All-Day response.
+     * Labels are unioned in chronological order; per-hour arrays are summed/averaged.
+     */
+    private function mergeStoredChartData(\Illuminate\Support\Collection $rows): array
+    {
+        $byLabel = [];
+
+        foreach ($rows as $row) {
+            $d = json_decode($row->chart_data, true);
+            foreach (($d['labels'] ?? []) as $i => $label) {
+                if (!isset($byLabel[$label])) {
+                    $byLabel[$label] = [
+                        'parts'   => 0, 'rejects' => 0, 'alarms'  => 0,
+                        'spindle' => [], 'idle'    => [], 'alarm_pct' => [],
+                        'run_sec' => 0, 'idle_sec' => 0, 'alarm_sec' => 0,
+                        'samples' => 0,
+                    ];
+                }
+                $b = &$byLabel[$label];
+                $b['parts']   += (int) ($d['parts_per_hour'][$i]   ?? 0);
+                $b['rejects'] += (int) ($d['rejects_per_hour'][$i]  ?? 0);
+                $b['alarms']  += (int) ($d['alarms_per_hour'][$i]   ?? 0);
+                $b['spindle'][]    = (float) ($d['spindle_util_per_hour'][$i] ?? 0);
+                $b['idle'][]       = (float) ($d['idle_pct_per_hour'][$i]     ?? 0);
+                $b['alarm_pct'][]  = (float) ($d['alarm_pct_per_hour'][$i]    ?? 0);
+
+                $ts   = $d['time_stats'] ?? [];
+                $intS = (float) ($ts['log_interval_seconds'] ?? 5);
+                $b['run_sec']   += (int) round(($d['spindle_util_per_hour'][$i] ?? 0) / 100 * 3600);
+                $b['idle_sec']  += (int) round(($d['idle_pct_per_hour'][$i]     ?? 0) / 100 * 3600);
+                $b['alarm_sec'] += (int) round(($d['alarm_pct_per_hour'][$i]    ?? 0) / 100 * 3600);
+            }
+            unset($b);
+        }
+
+        ksort($byLabel);
+        $labels   = array_keys($byLabel);
+        $avg      = fn ($arr) => count($arr) ? round(array_sum($arr) / count($arr), 1) : 0.0;
+
+        $runSec   = array_sum(array_column($byLabel, 'run_sec'));
+        $idleSec  = array_sum(array_column($byLabel, 'idle_sec'));
+        $alarmSec = array_sum(array_column($byLabel, 'alarm_sec'));
+        $totalSec = $runSec + $idleSec + $alarmSec;
+        $totalParts   = array_sum(array_column($byLabel, 'parts'));
+        $totalRejects = array_sum(array_column($byLabel, 'rejects'));
+        $totalAlarms  = array_sum(array_column($byLabel, 'alarms'));
+
+        return [
+            'labels'                => $labels,
+            'parts_per_hour'        => array_values(array_map(fn ($b) => $b['parts'],   $byLabel)),
+            'rejects_per_hour'      => array_values(array_map(fn ($b) => $b['rejects'], $byLabel)),
+            'alarms_per_hour'       => array_values(array_map(fn ($b) => $b['alarms'],  $byLabel)),
+            'spindle_util_per_hour' => array_values(array_map(fn ($b) => $avg($b['spindle']),    $byLabel)),
+            'idle_pct_per_hour'     => array_values(array_map(fn ($b) => $avg($b['idle']),       $byLabel)),
+            'alarm_pct_per_hour'    => array_values(array_map(fn ($b) => $avg($b['alarm_pct']),  $byLabel)),
+            'summary' => [
+                'total_parts'   => $totalParts,
+                'total_rejects' => $totalRejects,
+                'defect_rate'   => $totalParts > 0 ? round($totalRejects / $totalParts * 100, 2) : 0.0,
+                'alarm_events'  => $totalAlarms,
+            ],
+            'time_stats' => [
+                'log_interval_seconds' => 60,
+                'total_samples'        => count($labels),
+                'run_seconds'          => $runSec,
+                'idle_seconds'         => $idleSec,
+                'alarm_seconds'        => $alarmSec,
+                'availability_pct'     => $totalSec > 0 ? round(($runSec + $idleSec) / $totalSec * 100, 1) : 0.0,
+                'spindle_util_pct'     => $totalSec > 0 ? round($runSec / $totalSec * 100, 1) : 0.0,
+                'parts_per_run_hour'   => $runSec > 0 ? round($totalParts / ($runSec / 3600), 1) : null,
+            ],
+        ];
+    }
+
+    /**
+     * Reconstruct machine timeline segments from hourly stored chart_data.
+     * Used for past-date timeline when raw iot_logs have been purged.
+     * Each stored hour is split into running / alarm / idle sub-segments
+     * proportional to the stored per-hour state percentages.
+     */
+    private function timelineFromStoredChart(
+        \Illuminate\Support\Collection $rows,
+        Carbon $since,
+        Carbon $until
+    ): array {
+        $sinceTs  = $since->timestamp;
+        $untilTs  = $until->timestamp;
+        $totalMin = (int) round(($untilTs - $sinceTs) / 60);
+
+        if ($totalMin <= 0) {
+            return [
+                'window_from' => $since->format('H:i'),
+                'window_to'   => $until->format('H:i'),
+                'total_min'   => 0,
+                'segments'    => [],
+                'summary_min' => (object) [],
+                'source'      => 'stored',
+            ];
+        }
+
+        $segments = [];
+        $summary  = ['running' => 0, 'idle' => 0, 'alarm' => 0, 'offline' => 0];
+
+        foreach ($rows as $row) {
+            $d            = json_decode($row->chart_data, true);
+            $labels       = $d['labels']                ?? [];
+            $spindleUtil  = $d['spindle_util_per_hour'] ?? [];
+            $idlePct      = $d['idle_pct_per_hour']     ?? [];
+            $alarmPct     = $d['alarm_pct_per_hour']    ?? [];
+
+            foreach ($labels as $i => $label) {
+                $hourStart = \Carbon\Carbon::parse($label);
+                $fromMin   = (int) round(($hourStart->timestamp - $sinceTs) / 60);
+                $toMin     = min($totalMin, $fromMin + 60);
+
+                if ($fromMin >= $totalMin || $toMin <= 0 || $toMin <= $fromMin) {
+                    continue;
+                }
+
+                $hourMin  = $toMin - $fromMin;
+                $runMin   = (int) round((float) ($spindleUtil[$i] ?? 0) / 100 * $hourMin);
+                $alarmMin = (int) round((float) ($alarmPct[$i]    ?? 0) / 100 * $hourMin);
+                $idleMin  = max(0, $hourMin - $runMin - $alarmMin);
+
+                $cursor = $fromMin;
+                foreach ([['running', $runMin], ['alarm', $alarmMin], ['idle', $idleMin]] as [$state, $min]) {
+                    if ($min <= 0) {
+                        continue;
+                    }
+                    $segments[] = [
+                        'state'        => $state,
+                        'from_min'     => $cursor,
+                        'to_min'       => $cursor + $min,
+                        'duration_min' => $min,
+                        'from_label'   => $since->copy()->addMinutes($cursor)->format('H:i'),
+                        'to_label'     => $since->copy()->addMinutes($cursor + $min)->format('H:i'),
+                    ];
+                    $summary[$state] += $min;
+                    $cursor += $min;
+                }
+            }
+        }
+
+        // Sort segments by from_min (multiple shifts may interleave)
+        usort($segments, fn ($a, $b) => $a['from_min'] <=> $b['from_min']);
+
+        $windowTo = ($until->format('H:i') === '00:00' && $totalMin >= 60 * 23)
+            ? '24:00'
+            : $until->format('H:i');
+
+        return [
+            'window_from' => $since->format('H:i'),
+            'window_to'   => $windowTo,
+            'total_min'   => $totalMin,
+            'segments'    => $segments,
+            'summary_min' => $summary,
+            'source'      => 'stored',
+        ];
     }
 
     // ── Private helpers ───────────────────────────────────────

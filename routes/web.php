@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\Dashboard\DashboardController;
 use App\Http\Controllers\Admin\Factory\FactoryAdminController;
 use App\Http\Controllers\Admin\Iot\IotDashboardController;
 use App\Http\Controllers\Admin\Downtime\DowntimeController as AdminDowntimeController;
+use App\Http\Controllers\Admin\Quality\RejectReasonController as AdminRejectReasonController;
 use App\Http\Controllers\Admin\Employee\EmployeeController as AdminEmployeeController;
 use App\Http\Controllers\Admin\Machine\MachineController as AdminMachineController;
 use App\Http\Controllers\Admin\Part\PartRoutingController;
@@ -104,6 +105,11 @@ Route::middleware(['auth:web', 'factory.scope', 'admin.role'])
         // Downtime Management
         Route::prefix('downtimes')->name('downtimes.')->group(function () {
             Route::get('/', [AdminDowntimeController::class, 'index'])->name('index');
+        });
+
+        // Reject Reasons
+        Route::prefix('reject-reasons')->name('reject-reasons.')->group(function () {
+            Route::get('/', [AdminRejectReasonController::class, 'index'])->name('index');
         });
 
         // IoT Dashboard

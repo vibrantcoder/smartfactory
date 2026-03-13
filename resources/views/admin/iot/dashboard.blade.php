@@ -1664,7 +1664,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this._charts[k] = null;
             });
 
-            if (!this.chartData || this.chartData.labels.length === 0) return;
+            if (!this.chartData || !Array.isArray(this.chartData.labels) || this.chartData.labels.length === 0) return;
 
             const labels = this.chartData.labels;
 

@@ -649,7 +649,9 @@ function downtimeManager(apiToken, factoryId, machines, reasons, factories) {
                 const params = new URLSearchParams();
                 if (this.currentFactoryId) params.append('factory_id', this.currentFactoryId);
                 const res  = await fetch(`/api/v1/downtime-reasons?${params}`, { headers: this.headers });
-                this.reasons = await res.json();
+                if (!res.ok) return;
+                const data = await res.json();
+                this.reasons = Array.isArray(data) ? data : (data.data ?? []);
             } catch(e) { /* silent */ }
         },
 

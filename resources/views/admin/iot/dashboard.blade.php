@@ -675,19 +675,27 @@
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                         </svg>
-                        Loading…
+                        Loading chart…
                     </div>
                 </div>
-                {{-- canvas always in DOM; x-show controls visibility --}}
-                <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 220px; position: relative;">
-                    <canvas id="detail-parts"></canvas>
-                </div>
-                <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
-                     class="flex flex-col items-center justify-center py-12 text-slate-600">
-                    <svg class="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                    </svg>
-                    <p class="text-sm" x-text="selectedShiftId ? 'No data for ' + (selectedShiftObj?.name || 'this shift') + ' on ' + chartDate : 'No production data for ' + chartDate"></p>
+                {{-- Canvas always in DOM so dimensions are always computed correctly.
+                     Loading/no-data states overlay on top via position:absolute. --}}
+                <div style="height: 220px; position: relative;">
+                    <canvas id="detail-parts" style="display:block;"></canvas>
+                    <div x-show="chartLoading"
+                         class="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-xl">
+                        <svg class="h-5 w-5 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                    </div>
+                    <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                         class="absolute inset-0 flex flex-col items-center justify-center text-slate-600">
+                        <svg class="h-10 w-10 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        <p class="text-sm" x-text="selectedShiftId ? 'No data for ' + (selectedShiftObj?.name || 'this shift') + ' on ' + chartDate : 'No production data for ' + chartDate"></p>
+                    </div>
                 </div>
             </div>
 
@@ -705,11 +713,18 @@
                     </div>
                 </div>
                 <p class="text-xs text-slate-600 mb-4">Each bar = 1 hour. Cutting vs idle vs alarm time fraction per hour.</p>
-                <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 200px; position: relative;">
-                    <canvas id="detail-spindle"></canvas>
+                <div style="height: 200px; position: relative;">
+                    <canvas id="detail-spindle" style="display:block;"></canvas>
+                    <div x-show="chartLoading"
+                         class="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-xl">
+                        <svg class="h-5 w-5 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                    </div>
+                    <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                         class="absolute inset-0 flex items-center justify-center text-slate-600 text-sm">No data for this period</div>
                 </div>
-                <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
-                     class="flex items-center justify-center h-32 text-slate-600 text-sm">No data for this period</div>
             </div>
 
             {{-- Row 3: Rejects + Alarms (side by side) --}}
@@ -722,11 +737,18 @@
                         <span class="text-xs text-slate-500 tabular-nums"
                               x-text="'Total: ' + machinePartsTotals.rejects + ' (' + machinePartsTotals.defect_rate + '%)'"></span>
                     </div>
-                    <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 160px; position: relative;">
-                        <canvas id="detail-rejects"></canvas>
+                    <div style="height: 160px; position: relative;">
+                        <canvas id="detail-rejects" style="display:block;"></canvas>
+                        <div x-show="chartLoading"
+                             class="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-xl">
+                            <svg class="h-4 w-4 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                             class="absolute inset-0 flex items-center justify-center text-slate-600 text-sm">No data</div>
                     </div>
-                    <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
-                         class="flex items-center justify-center h-32 text-slate-600 text-sm">No data</div>
                 </div>
 
                 {{-- Alarm Events / Hour --}}
@@ -736,11 +758,18 @@
                         <span class="text-xs text-slate-500 tabular-nums"
                               x-text="'Total: ' + machinePartsTotals.alarm_events"></span>
                     </div>
-                    <div x-show="chartData && chartData.labels && chartData.labels.length > 0" style="height: 160px; position: relative;">
-                        <canvas id="detail-alarms"></canvas>
+                    <div style="height: 160px; position: relative;">
+                        <canvas id="detail-alarms" style="display:block;"></canvas>
+                        <div x-show="chartLoading"
+                             class="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-xl">
+                            <svg class="h-4 w-4 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                        </div>
+                        <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
+                             class="absolute inset-0 flex items-center justify-center text-slate-600 text-sm">No data</div>
                     </div>
-                    <div x-show="!chartLoading && (!chartData || !chartData.labels || chartData.labels.length === 0)"
-                         class="flex items-center justify-center h-32 text-slate-600 text-sm">No data</div>
                 </div>
             </div>
 
@@ -1449,7 +1478,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 if (!res.ok) return;
                 const json    = await res.json();
                 this.trendData = json.trend || [];
-                this.$nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => this.renderTrendChart())));
+                this.$nextTick(() => requestAnimationFrame(() => this.renderTrendChart()));
             } catch { /* silent */ } finally {
                 this.trendLoading = false;
             }
@@ -1458,13 +1487,12 @@ function iotDashboard(apiToken, factoryId, factories) {
         renderTrendChart() {
             const canvas = document.getElementById('trend-chart');
             if (!(canvas instanceof HTMLCanvasElement) || !this.trendData.length) return;
-            if (canvas.offsetWidth === 0 && canvas.offsetHeight === 0) return;
             if (this._trendChart) { try { this._trendChart.destroy(); } catch (_) {} this._trendChart = null; }
             // Set intrinsic canvas dimensions to fill container (responsive:false requires this)
             const parent = canvas.parentElement;
             if (parent) {
-                canvas.width  = parent.clientWidth  || parent.offsetWidth  || 600;
-                canvas.height = parent.clientHeight || parent.offsetHeight || 240;
+                canvas.width  = parent.clientWidth  || 600;
+                canvas.height = parent.clientHeight || 240;
             }
             const labels = this.trendData.map(r => {
                 const d = new Date(r.oee_date);
@@ -1483,7 +1511,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                         ],
                     },
                     options: {
-                        responsive: false, maintainAspectRatio: false,
+                        responsive: false, maintainAspectRatio: false, animation: false,
                         plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
                         scales: {
                             y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
@@ -1534,10 +1562,10 @@ function iotDashboard(apiToken, factoryId, factories) {
                 this.chartLoading = false;
             }
 
-            // Wait for Alpine to flush x-show changes (nextTick), then TWO animation
-            // frames: first RAF triggers layout recalc for newly-visible canvases,
-            // second RAF fires after the browser has computed canvas dimensions.
-            this.$nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => this.renderCharts())));
+            // Canvases are always in the DOM so no x-show layout race.
+            // One $nextTick (lets Alpine flush reactive updates) +
+            // one RAF (lets the browser finish any pending layout) is enough.
+            this.$nextTick(() => requestAnimationFrame(() => this.renderCharts()));
             this.loadTimeline(machineId); // fire-and-forget; independent of chart render
         },
 
@@ -1668,7 +1696,11 @@ function iotDashboard(apiToken, factoryId, factories) {
         // ── Chart rendering ───────────────────────────────────
 
         renderCharts() {
-            ['parts', 'rejects', 'alarms', 'spindle'].forEach(k => {
+            // Destroy ALL existing chart instances before creating new ones.
+            // With animation:false, destroy() is safe to call synchronously —
+            // there are no pending RAF animation callbacks that could fire with
+            // a null context and throw "Cannot read properties of null (reading 'save')".
+            Object.keys(this._charts).forEach(k => {
                 try { this._charts[k]?.destroy(); } catch (_) {}
                 this._charts[k] = null;
             });
@@ -1680,28 +1712,35 @@ function iotDashboard(apiToken, factoryId, factories) {
             // Helper: get canvas only if it's a real HTMLCanvasElement that is
             // visible and has non-zero dimensions. Chart.js silently produces a
             // 0×0 chart on a hidden canvas. Also destroys orphaned Chart.js instances.
+            // Canvas elements are ALWAYS in the DOM (no x-show wrapper), so
+            // clientWidth/clientHeight are always valid layout values.
             const getCanvas = id => {
                 const el = document.getElementById(id);
                 if (!(el instanceof HTMLCanvasElement)) return null;
-                // Skip if inside a display:none ancestor
-                if (el.offsetWidth === 0 && el.offsetHeight === 0) return null;
-                // Destroy any orphaned chart instance Chart.js tracks internally
+                // Destroy any orphaned Chart.js instance on this canvas
                 const existing = Chart.getChart(el);
                 if (existing) { try { existing.destroy(); } catch (_) {} }
-                // Explicitly size canvas to fill its container.
-                // We use responsive:false to avoid Chart.js ResizeObserver which can
-                // fire on a null canvas after destroy() and throw uncaught errors.
+                // Set intrinsic pixel dimensions = container inner size.
+                // responsive:false means Chart.js won't set up a ResizeObserver.
                 const parent = el.parentElement;
                 if (parent) {
-                    el.width  = parent.clientWidth  || parent.offsetWidth  || 400;
-                    el.height = parent.clientHeight || parent.offsetHeight || 200;
+                    el.width  = parent.clientWidth  || 400;
+                    el.height = parent.clientHeight || 200;
                 }
+                // Sanity: if container still has no width, skip this canvas
+                if (!el.width || !el.height) return null;
                 return el;
             };
 
             const darkOpts = {
                 responsive: false,
                 maintainAspectRatio: false,
+                // Disable animations: Chart.js uses internal RAF for animations.
+                // If destroy() is called while an animation frame is pending, that
+                // frame fires with ctx=null and throws "Cannot read properties of
+                // null (reading 'save'/'getContext')". animation:false makes
+                // Chart.js draw synchronously — no pending RAFs, no race conditions.
+                animation: false,
                 plugins: { legend: { display: false } },
                 scales: {
                     x: {
@@ -1784,6 +1823,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                 const spindleOpts = {
                     responsive: false,
                     maintainAspectRatio: false,
+                    animation: false,
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -1896,7 +1936,7 @@ function iotDashboard(apiToken, factoryId, factories) {
                                 legend: { display: false },
                                 tooltip: { enabled: false },
                             },
-                            animation: { duration: 900, easing: 'easeInOutQuart' },
+                            animation: false,
                         },
                     });
                 } catch (e) { console.warn('gauge chart:', e.message); }

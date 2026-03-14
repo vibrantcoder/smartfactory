@@ -164,14 +164,29 @@
                         <span>Setup: <strong x-text="totalSetupTimeFormatted"></strong></span>
                     </div>
 
-                    {{-- Ideal production badge --}}
-                    <template x-if="steps.length > 0 && totalCycleTime > 0">
+                    {{-- Load/Unload total badge --}}
+                    <template x-if="totalLoadUnloadTime > 0">
+                        <div class="flex items-center gap-1.5 rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                            </svg>
+                            <span>L/U: <strong x-text="toMMSS(totalLoadUnloadTime)"></strong></span>
+                        </div>
+                    </template>
+
+                    {{-- Ideal production badge — shows pcs/hr + pcs/shift --}}
+                    <template x-if="steps.length > 0 && timePerPart > 0">
                         <div class="flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                       d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                             </svg>
-                            <span>Ideal:&nbsp;<strong x-text="idealPerShift + ' pcs'"></strong></span>
+                            {{-- Per-hour rate (primary) --}}
+                            <strong x-text="partsPerHour + ' pcs/hr'"></strong>
+                            <span class="text-green-400">·</span>
+                            {{-- Per-shift (configurable) --}}
+                            <span x-text="idealPerShift + ' pcs'"></span>
                             <span class="text-green-500">/</span>
                             <input
                                 x-model.number="shiftMinutes"
@@ -182,7 +197,7 @@
                                 class="w-14 rounded border border-green-200 bg-white px-1.5 py-0.5 text-xs text-green-700 focus:border-green-400 focus:outline-none"
                                 title="Shift duration in minutes"
                             >
-                            <span class="text-green-500">min shift</span>
+                            <span class="text-green-500">min</span>
                         </div>
                     </template>
 
@@ -339,12 +354,15 @@
                                     >
                                 </div>
 
-                                {{-- Combined time per part badge --}}
+                                {{-- Combined time per part + pcs/hr for this step --}}
                                 <template x-if="(effectiveCycleTime(step) > 0 || (parseFloat(step.loadUnloadTime) > 0))">
-                                    <div class="text-xs font-medium">
+                                    <div class="flex items-center gap-2 text-xs font-medium">
                                         <span class="text-gray-400">Per part:</span>
-                                        <span class="ml-1 font-mono text-indigo-600"
+                                        <span class="font-mono text-indigo-600"
                                               x-text="toMMSS(effectiveCycleTime(step) + (parseFloat(step.loadUnloadTime) || 0))"></span>
+                                        <span class="text-gray-300">·</span>
+                                        <span class="text-green-600 font-semibold"
+                                              x-text="Math.floor(60 / (effectiveCycleTime(step) + (parseFloat(step.loadUnloadTime) || 0.001))) + ' pcs/hr'"></span>
                                     </div>
                                 </template>
 
@@ -411,45 +429,163 @@
                         </div>
                     </div>
 
+                    {{-- Per-process planning breakdown table --}}
+                    <template x-if="steps.length > 0 && stepBreakdown.some(s => s.hasTime)">
+                        <div class="rounded-lg border border-gray-200 overflow-hidden">
+                            <div class="bg-gray-100 px-4 py-2 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Process-wise Planning</span>
+                                <span class="text-xs text-gray-400">Bottleneck = slowest step → drives total throughput</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead class="bg-gray-50 border-b border-gray-200">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left text-gray-500 font-medium w-6">#</th>
+                                            <th class="px-3 py-2 text-left text-gray-500 font-medium">Process</th>
+                                            <th class="px-3 py-2 text-center text-blue-600 font-medium">Cycle</th>
+                                            <th class="px-3 py-2 text-center text-purple-600 font-medium">L/U</th>
+                                            <th class="px-3 py-2 text-center text-indigo-600 font-medium">Per Part</th>
+                                            <th class="px-3 py-2 text-center text-amber-600 font-medium">Setup</th>
+                                            <th class="px-3 py-2 text-center text-green-700 font-semibold">Pcs / Hr</th>
+                                            <th class="px-3 py-2 text-center text-green-800 font-semibold">
+                                                Pcs / <span x-text="shiftMinutes"></span>min
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <template x-for="row in stepBreakdown" :key="row.seq">
+                                            <tr class="hover:bg-gray-50">
+                                                <td class="px-3 py-2 text-gray-400 font-mono" x-text="row.seq"></td>
+                                                <td class="px-3 py-2 font-medium text-gray-800" x-text="row.name"></td>
+                                                {{-- Cycle --}}
+                                                <td class="px-3 py-2 text-center font-mono text-blue-700"
+                                                    x-text="row.cycle > 0 ? toMMSS(row.cycle) : '—'"></td>
+                                                {{-- L/U --}}
+                                                <td class="px-3 py-2 text-center font-mono text-purple-700"
+                                                    x-text="row.lu > 0 ? toMMSS(row.lu) : '—'"></td>
+                                                {{-- Per part --}}
+                                                <td class="px-3 py-2 text-center font-mono font-semibold text-indigo-700"
+                                                    x-text="row.perPart > 0 ? toMMSS(row.perPart) : '—'"></td>
+                                                {{-- Setup --}}
+                                                <td class="px-3 py-2 text-center font-mono text-amber-700"
+                                                    x-text="row.setup > 0 ? toMMSS(row.setup) : '—'"></td>
+                                                {{-- Pcs/Hr --}}
+                                                <td class="px-3 py-2 text-center font-semibold"
+                                                    :class="row.pcsHr > 0 && row.pcsHr === Math.min(...stepBreakdown.filter(s=>s.pcsHr>0).map(s=>s.pcsHr)) ? 'text-red-600 bg-red-50' : 'text-green-700'"
+                                                    x-text="row.pcsHr > 0 ? row.pcsHr : '—'">
+                                                </td>
+                                                {{-- Pcs/Shift --}}
+                                                <td class="px-3 py-2 text-center font-semibold"
+                                                    :class="row.pcsShift > 0 && row.pcsShift === Math.min(...stepBreakdown.filter(s=>s.pcsShift>0).map(s=>s.pcsShift)) ? 'text-red-600 bg-red-50' : 'text-green-700'"
+                                                    x-text="row.pcsShift > 0 ? row.pcsShift : '—'">
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                    {{-- Totals row --}}
+                                    <tfoot class="bg-indigo-50 border-t-2 border-indigo-200">
+                                        <tr>
+                                            <td class="px-3 py-2"></td>
+                                            <td class="px-3 py-2 font-bold text-gray-800">TOTAL (all steps)</td>
+                                            <td class="px-3 py-2 text-center font-mono font-bold text-blue-800"
+                                                x-text="totalCycleTime > 0 ? toMMSS(totalCycleTime) : '—'"></td>
+                                            <td class="px-3 py-2 text-center font-mono font-bold text-purple-800"
+                                                x-text="totalLoadUnloadTime > 0 ? toMMSS(totalLoadUnloadTime) : '—'"></td>
+                                            <td class="px-3 py-2 text-center font-mono font-bold text-indigo-800"
+                                                x-text="timePerPart > 0 ? toMMSS(timePerPart) : '—'"></td>
+                                            <td class="px-3 py-2 text-center font-mono font-bold text-amber-800"
+                                                x-text="totalSetupTime > 0 ? toMMSS(totalSetupTime) : '—'"></td>
+                                            <td class="px-3 py-2 text-center font-bold text-green-800 text-sm"
+                                                x-text="partsPerHour > 0 ? partsPerHour + ' pcs/hr' : '—'"></td>
+                                            <td class="px-3 py-2 text-center font-bold text-green-900 text-sm"
+                                                x-text="idealPerShift > 0 ? idealPerShift + ' pcs' : '—'"></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            {{-- Bottleneck note --}}
+                            <template x-if="stepBreakdown.filter(s=>s.pcsHr>0).length > 1">
+                                <div class="bg-red-50 border-t border-red-100 px-4 py-2 flex items-center gap-2 text-xs text-red-700">
+                                    <svg class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span>
+                                        <strong>Bottleneck:</strong>
+                                        <span x-text="stepBreakdown.reduce((min, s) => (s.pcsHr > 0 && (!min || s.pcsHr < min.pcsHr)) ? s : min, null)?.name ?? '—'"></span>
+                                        — highlighted in red. The slowest step limits overall throughput.
+                                        Total throughput = <strong x-text="partsPerHour + ' pcs/hr · ' + idealPerShift + ' pcs/shift'"></strong>.
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
                     {{-- Production formula --}}
-                    <template x-if="totalCycleTime > 0 || totalLoadUnloadTime > 0">
-                        <div class="rounded-lg bg-gray-50 border border-gray-100 px-4 py-2 text-xs text-gray-600">
+                    <template x-if="timePerPart > 0">
+                        <div class="rounded-lg bg-gray-50 border border-gray-100 px-4 py-2 text-xs text-gray-600 space-y-1.5">
+
+                            {{-- Rate formula row --}}
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="font-medium text-gray-700">Production formula:</span>
+                                <span class="font-medium text-gray-700">Rate formula:</span>
 
-                                {{-- Setup block --}}
-                                <span class="rounded bg-amber-100 px-2 py-0.5 text-amber-800 font-mono">
-                                    Setup <span x-text="toMMSS(totalSetupTime)"></span>
-                                </span>
-                                <span class="text-gray-400">+</span>
-
-                                {{-- Qty × (load/unload + cycle) --}}
+                                {{-- Cycle --}}
                                 <span class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 font-mono">
-                                    Qty ×
-                                    <template x-if="totalLoadUnloadTime > 0">
-                                        <span>(<span x-text="toMMSS(totalLoadUnloadTime)"></span> L/U + <span x-text="toMMSS(totalCycleTime)"></span> cycle = <span x-text="toMMSS(timePerPart)"></span>)</span>
-                                    </template>
-                                    <template x-if="totalLoadUnloadTime <= 0">
-                                        <span x-text="toMMSS(totalCycleTime)"></span>
-                                    </template>
+                                    Cycle <span x-text="toMMSS(totalCycleTime)"></span>
                                 </span>
+
+                                <template x-if="totalLoadUnloadTime > 0">
+                                    <span class="text-gray-400">+</span>
+                                </template>
+
+                                {{-- Load/Unload --}}
+                                <template x-if="totalLoadUnloadTime > 0">
+                                    <span class="rounded bg-purple-100 px-2 py-0.5 text-purple-800 font-mono">
+                                        L/U <span x-text="toMMSS(totalLoadUnloadTime)"></span>
+                                    </span>
+                                </template>
+
                                 <span class="text-gray-400">=</span>
 
-                                {{-- Total shift time --}}
-                                <span class="text-gray-500">
-                                    ≤ <span x-text="shiftMinutes"></span> min shift
+                                {{-- Time per part --}}
+                                <span class="rounded bg-indigo-100 px-2 py-0.5 text-indigo-800 font-mono font-semibold">
+                                    <span x-text="toMMSS(timePerPart)"></span> / part
                                 </span>
 
-                                <span class="mx-1 text-gray-300">|</span>
+                                <span class="text-gray-400">→</span>
 
-                                {{-- Ideal result --}}
-                                <span class="font-semibold text-green-700">
-                                    Ideal: <span x-text="idealPerShift"></span> pcs / shift
-                                </span>
-                                <span class="text-gray-400 text-xs">
-                                    (<span x-text="toMMSS(firstPartTime)"></span> to first part)
+                                {{-- Per-hour (key figure) --}}
+                                <span class="rounded bg-green-100 px-2 py-0.5 text-green-800 font-semibold">
+                                    60 ÷ <span x-text="toMMSS(timePerPart)"></span> = <strong><span x-text="partsPerHour"></span> pcs / hr</strong>
                                 </span>
                             </div>
+
+                            {{-- Shift capacity row --}}
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-medium text-gray-700">Shift capacity:</span>
+
+                                <template x-if="totalSetupTime > 0">
+                                    <span class="rounded bg-amber-100 px-2 py-0.5 text-amber-800 font-mono">
+                                        Setup <span x-text="toMMSS(totalSetupTime)"></span>
+                                    </span>
+                                </template>
+                                <template x-if="totalSetupTime > 0">
+                                    <span class="text-gray-400">+</span>
+                                </template>
+
+                                <span class="text-gray-500 font-mono">
+                                    Qty × <span x-text="toMMSS(timePerPart)"></span>
+                                </span>
+                                <span class="text-gray-400">≤</span>
+                                <span class="font-mono text-gray-600"><span x-text="shiftMinutes"></span> min</span>
+                                <span class="text-gray-400">→</span>
+                                <span class="font-semibold text-green-700">
+                                    <span x-text="idealPerShift"></span> pcs / shift
+                                </span>
+                                <span class="text-gray-400 text-xs">
+                                    (first part after <span x-text="toMMSS(firstPartTime)"></span>)
+                                </span>
+                            </div>
+
                         </div>
                     </template>
                 </div>
@@ -550,6 +686,41 @@ function routingBuilder(config) {
         // First-part lead time = setup (once) + one cycle + one load/unload
         get firstPartTime() {
             return this.totalSetupTime + this.timePerPart;
+        },
+
+        // Parts per hour = 60 / timePerPart
+        get partsPerHour() {
+            var perPart = this.timePerPart;
+            if (perPart <= 0) return 0;
+            return Math.floor(60 / perPart);
+        },
+
+        // Per-step breakdown for the planning table.
+        // Each step shows its individual cycle, L/U, total per-part time,
+        // pcs/hr (that step alone), and pcs/shift (that step alone, minus setup).
+        get stepBreakdown() {
+            var self = this;
+            var shiftMin = parseFloat(self.shiftMinutes) || 480;
+            return self.steps.map(function(step) {
+                var cycle   = self.effectiveCycleTime(step);
+                var lu      = parseFloat(step.loadUnloadTime) || 0;
+                var setup   = parseFloat(step.setupTime)      || 0;
+                var perPart = cycle + lu;
+                var pcsHr   = perPart > 0 ? Math.floor(60 / perPart) : 0;
+                var avail   = shiftMin - setup;
+                var pcsShift = (perPart > 0 && avail > 0) ? Math.floor(avail / perPart) : 0;
+                return {
+                    seq:             step.sequenceOrder,
+                    name:            step.processMasterName,
+                    cycle:           cycle,
+                    lu:              lu,
+                    perPart:         perPart,
+                    setup:           setup,
+                    pcsHr:           pcsHr,
+                    pcsShift:        pcsShift,
+                    hasTime:         perPart > 0,
+                };
+            });
         },
 
         // Ideal qty per shift:

@@ -247,7 +247,7 @@
                                         : 'border-amber-300 bg-amber-50/60'">
                                 <option value="">— select step —</option>
                                 <template x-for="step in selectedPartProcesses" :key="step.id">
-                                    <option :value="step.id"
+                                    <option :value="Number(step.id)"
                                             x-text="'Step ' + step.sequence_order + ': ' + (step.process_master?.name || '?') + ' (' + effectiveCycleTime(step).toFixed(1) + ' min)'">
                                     </option>
                                 </template>
@@ -1569,10 +1569,14 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.editPlan  = plan;
             this.formError = null;
             this.operatorOee = null;
+            // Set part_process_id to '' first so the x-if condition (which
+            // depends on form.part_id) triggers Alpine to render the <select>
+            // and its x-for <option> elements. Then in $nextTick, after all
+            // options are in the DOM, set the real value so x-model can match.
             this.form = {
                 machine_id:      plan.machine_id,
                 part_id:         plan.part_id,
-                part_process_id: plan.part_process_id || '',
+                part_process_id: '',
                 shift_id:        plan.shift_id,
                 operator_id:     plan.operator_id || '',
                 planned_date:    plan.planned_date ? String(plan.planned_date).substring(0, 10) : '',
@@ -1584,10 +1588,14 @@ function productionCalendar(apiToken, factoryId, factories, machines, shifts, pa
             this.actualsForm  = { actual_qty: 0, defect_qty: 0, notes: '' };
             this.actualsError = null;
             this.showModal = true;
-            // Load OEE if operator already assigned
-            if (plan.operator_id) {
-                this.$nextTick(() => this.loadOperatorOee());
-            }
+            // Defer setting part_process_id until Alpine has rendered the
+            // x-if <select> and x-for <option> elements for the selected part.
+            this.$nextTick(() => {
+                this.form.part_process_id = plan.part_process_id
+                    ? Number(plan.part_process_id)
+                    : '';
+                if (plan.operator_id) this.loadOperatorOee();
+            });
         },
 
         // ── Record Actuals ───────────────────────────────────
